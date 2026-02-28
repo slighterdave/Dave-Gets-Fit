@@ -99,7 +99,6 @@
 
     const result = await Auth.register(username, password);
     if (!result.ok) { errEl.textContent = result.error; return; }
-    await Auth.login(username, password);
     window.location.href = 'index.html';
   });
 </script>

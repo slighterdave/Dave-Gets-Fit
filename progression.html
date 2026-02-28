@@ -92,10 +92,7 @@
 <script>
   Auth.requireAuth();
 
-  const KEY = Auth.userKey('dgf_workouts');
-
-  function getSessions() { return Storage.get(KEY); }
-  function saveSessions(list) { Storage.set(KEY, list); }
+  async function getSessions() { return API.get('/workouts').catch(() => []); }
 
   function startOfWeek() {
     const d = new Date();
@@ -291,8 +288,8 @@
     }
   }
 
-  document.getElementById('chart-exercise-select').addEventListener('change', () => {
-    drawChart(getSessions());
+  document.getElementById('chart-exercise-select').addEventListener('change', async () => {
+    drawChart(await getSessions());
   });
 
   /* ── History ───────────────────────────────────────── */
@@ -307,9 +304,8 @@
     }
     emptyMsg.style.display = 'none';
 
-    [...sessions].reverse().forEach((session, revIdx) => {
-      const origIdx = sessions.length - 1 - revIdx;
-      const blockId = 'session-' + origIdx;
+    [...sessions].reverse().forEach((session) => {
+      const blockId = 'session-' + session.id;
 
       const div = document.createElement('div');
       div.className = 'session-block';
@@ -318,7 +314,7 @@
           <span class="session-date">${formatDate(session.date)}</span>
           <span class="session-meta">${session.exercises.length} exercise${session.exercises.length !== 1 ? 's' : ''}${session.notes ? ' · ' + session.notes : ''}</span>
           <span class="session-toggle">▼</span>
-          <button class="btn btn-danger btn-delete-session" data-idx="${origIdx}">Delete</button>
+          <button class="btn btn-danger btn-delete-session" data-id="${session.id}">Delete</button>
         </div>
         <div class="session-body" id="${blockId}">
           <table>
@@ -345,12 +341,9 @@
         this.querySelector('.session-toggle').textContent = isOpen ? '▲' : '▼';
       });
 
-      div.querySelector('.btn-delete-session').addEventListener('click', function (ev) {
+      div.querySelector('.btn-delete-session').addEventListener('click', async function (ev) {
         ev.stopPropagation();
-        const i = parseInt(this.dataset.idx, 10);
-        const list = getSessions();
-        list.splice(i, 1);
-        saveSessions(list);
+        await API.del('/workouts/' + this.dataset.id);
         render();
       });
 
@@ -359,8 +352,8 @@
   }
 
   /* ── Main render ───────────────────────────────────── */
-  function render() {
-    const sessions = getSessions();
+  async function render() {
+    const sessions = await getSessions();
     renderStats(sessions);
     drawChart(sessions);
     renderHistory(sessions);
@@ -370,7 +363,7 @@
   document.getElementById('workout-date').value = today();
   addExerciseRow();
 
-  document.getElementById('workout-form').addEventListener('submit', function (e) {
+  document.getElementById('workout-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const date  = document.getElementById('workout-date').value;
     const notes = document.getElementById('workout-notes').value.trim();
@@ -396,9 +389,7 @@
       return;
     }
 
-    const sessions = getSessions();
-    sessions.push({ id: sessions.length + '_' + Date.now(), date, notes, exercises });
-    saveSessions(sessions);
+    await API.post('/workouts', { date, notes, exercises });
 
     showAlert(document.getElementById('form-card'), 'Workout logged successfully!');
     document.getElementById('exercise-list').innerHTML = '';

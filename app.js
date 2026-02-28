@@ -1,19 +1,37 @@
 /**
  * Dave Gets Fit – shared utilities
- * Uses localStorage so data persists between sessions.
+ * Uses a REST API backend to persist data server-side.
  */
 
-const Storage = {
-  get(key) {
-    try {
-      return JSON.parse(localStorage.getItem(key)) || [];
-    } catch {
-      return [];
-    }
+const API = {
+  BASE: '/api',
+
+  /** Return the stored JWT token */
+  token() {
+    return sessionStorage.getItem('dgf_token');
   },
-  set(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
+
+  /** Make an authenticated fetch request */
+  async request(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = this.token();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(this.BASE + path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
   },
+
+  get(path)        { return this.request('GET',    path); },
+  post(path, body) { return this.request('POST',   path, body); },
+  put(path, body)  { return this.request('PUT',    path, body); },
+  del(path)        { return this.request('DELETE', path); },
 };
 
 /** Return today's date as YYYY-MM-DD */
@@ -40,55 +58,52 @@ function showAlert(container, message, type = 'success') {
   setTimeout(() => div.remove(), 3000);
 }
 
-/** SHA-256 hash via Web Crypto API – used for client-side credential storage */
-async function hashPassword(str) {
-  const encoded = new TextEncoder().encode(str);
-  const buf = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 const Auth = {
-  USERS_KEY:   'dgf_users',
-  SESSION_KEY: 'dgf_session',
+  TOKEN_KEY: 'dgf_token',
 
-  _users() {
-    try { return JSON.parse(localStorage.getItem(this.USERS_KEY)) || []; }
-    catch { return []; }
-  },
-  _saveUsers(users) {
-    localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
+  /** Decode the JWT payload without verification (client-side read only) */
+  _payload() {
+    const token = sessionStorage.getItem(this.TOKEN_KEY);
+    if (!token) return null;
+    try {
+      return JSON.parse(atob(token.split('.')[1]));
+    } catch { return null; }
   },
 
   /** Returns the current username string, or null if not logged in */
   currentUser() {
-    try { return JSON.parse(sessionStorage.getItem(this.SESSION_KEY)) || null; }
-    catch { return null; }
+    const p = this._payload();
+    if (!p) return null;
+    // Check expiry
+    if (p.exp && Date.now() / 1000 > p.exp) {
+      sessionStorage.removeItem(this.TOKEN_KEY);
+      return null;
+    }
+    return p.username || null;
   },
 
   async register(username, password) {
-    if (!/^[a-zA-Z0-9_]{2,30}$/.test(username)) {
-      return { ok: false, error: 'Username must be 2–30 characters (letters, numbers, underscores).' };
+    try {
+      const { token } = await API.post('/auth/register', { username, password });
+      sessionStorage.setItem(this.TOKEN_KEY, token);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
     }
-    const users = this._users();
-    if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-      return { ok: false, error: 'Username already taken.' };
-    }
-    users.push({ username, passwordHash: await hashPassword(password) });
-    this._saveUsers(users);
-    return { ok: true };
   },
 
   async login(username, password) {
-    const users = this._users();
-    const user  = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (!user) return { ok: false, error: 'User not found.' };
-    if (user.passwordHash !== await hashPassword(password)) return { ok: false, error: 'Incorrect password.' };
-    sessionStorage.setItem(this.SESSION_KEY, JSON.stringify(username));
-    return { ok: true };
+    try {
+      const { token } = await API.post('/auth/login', { username, password });
+      sessionStorage.setItem(this.TOKEN_KEY, token);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   },
 
   logout() {
-    sessionStorage.removeItem(this.SESSION_KEY);
+    sessionStorage.removeItem(this.TOKEN_KEY);
     window.location.href = 'login.html';
   },
 
@@ -99,11 +114,5 @@ const Auth = {
     }
     const el = document.getElementById('nav-username-display');
     if (el) el.textContent = this.currentUser();
-  },
-
-  /** Namespace a storage key to the current user */
-  userKey(key) {
-    const u = this.currentUser();
-    return u ? key + '_' + u : key;
   },
 };

@@ -92,10 +92,8 @@
 <script>
   Auth.requireAuth();
 
-  const PROFILE_KEY = Auth.userKey('dgf_profile');
-
-  function loadPage() {
-    const profile = Storage.get(PROFILE_KEY);
+  async function loadPage() {
+    const profile = await API.get('/profile').catch(() => null);
     if (profile && profile.firstName) {
       document.getElementById('signup-section').style.display = 'none';
       document.getElementById('welcome-section').style.display = '';
@@ -103,7 +101,7 @@
     }
   }
 
-  document.getElementById('signup-form').addEventListener('submit', function (e) {
+  document.getElementById('signup-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const firstName = document.getElementById('first-name').value.trim();
     const lastName  = document.getElementById('last-name').value.trim();
@@ -117,19 +115,16 @@
     }
 
     const profile = { firstName, lastName, email, age, goal };
-    Storage.set(PROFILE_KEY, profile);
+    await API.put('/profile', profile);
 
     document.getElementById('signup-section').style.display = 'none';
     document.getElementById('welcome-section').style.display = '';
     document.getElementById('welcome-name').textContent = firstName;
   });
 
-  document.getElementById('reset-btn').addEventListener('click', function () {
+  document.getElementById('reset-btn').addEventListener('click', async function () {
     if (confirm('Reset all your fitness data? Your login account will remain active.')) {
-      const u = Auth.currentUser();
-      ['dgf_profile', 'dgf_workouts', 'dgf_weights', 'dgf_calories'].forEach(k => {
-        localStorage.removeItem(k + '_' + u);
-      });
+      await API.del('/user/data');
       location.reload();
     }
   });
