@@ -156,23 +156,15 @@
 <script>
   Auth.requireAuth();
 
-  const KEY = Auth.userKey('dgf_calories');
-
-  function getEntries() {
-    return Storage.get(KEY);
-  }
-
-  function saveEntries(list) {
-    Storage.set(KEY, list);
+  async function getEntries() {
+    return API.get('/calories').catch(() => []);
   }
 
   function getViewDate() {
     return document.getElementById('view-date').value;
   }
 
-  function getTarget() {
-    const entries = getEntries();
-    // Use the most recently saved target
+  function getTarget(entries) {
     const withTarget = entries.filter(e => e.target);
     if (withTarget.length === 0) return null;
     return parseFloat(withTarget[withTarget.length - 1].target);
@@ -185,7 +177,7 @@
 
     document.getElementById('stat-total').textContent = total;
 
-    const target = getTarget();
+    const target = getTarget(entries);
     if (target) {
       const remaining = target - total;
       document.getElementById('stat-target').textContent = target;
@@ -277,7 +269,6 @@
 
     tbody.innerHTML = '';
     dayEntries.forEach((e) => {
-      const globalIdx = entries.indexOf(e);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${e.meal}</td>
@@ -286,31 +277,29 @@
         <td>${e.protein ? parseFloat(e.protein).toFixed(1) : '—'}</td>
         <td>${e.carbs   ? parseFloat(e.carbs).toFixed(1)   : '—'}</td>
         <td>${e.fat     ? parseFloat(e.fat).toFixed(1)     : '—'}</td>
-        <td><button class="btn btn-danger" data-idx="${globalIdx}">Delete</button></td>
+        <td><button class="btn btn-danger" data-id="${e.id}">Delete</button></td>
       `;
       tbody.appendChild(tr);
     });
 
-    tbody.querySelectorAll('[data-idx]').forEach(btn => {
-      btn.addEventListener('click', function () {
-        const i = parseInt(this.dataset.idx, 10);
-        const list = getEntries();
-        list.splice(i, 1);
-        saveEntries(list);
+    tbody.querySelectorAll('[data-id]').forEach(btn => {
+      btn.addEventListener('click', async function () {
+        await API.del('/calories/' + this.dataset.id);
         render();
       });
     });
   }
 
-  function render() {
-    const entries = getEntries();
+  async function render() {
+    const entries = await getEntries();
     renderStats(entries);
     renderTable(entries);
   }
 
   // Pre-fill target from saved data
-  function prefillTarget() {
-    const target = getTarget();
+  async function prefillTarget() {
+    const entries = await getEntries();
+    const target = getTarget(entries);
     if (target) document.getElementById('daily-target').value = target;
   }
 
@@ -320,7 +309,7 @@
 
   document.getElementById('view-date').addEventListener('change', render);
 
-  document.getElementById('calorie-form').addEventListener('submit', function (e) {
+  document.getElementById('calorie-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const date     = document.getElementById('entry-date').value;
     const meal     = document.getElementById('meal-type').value;
@@ -336,9 +325,7 @@
       return;
     }
 
-    const list = getEntries();
-    list.push({ date, meal, food, calories, protein, carbs, fat, target });
-    saveEntries(list);
+    await API.post('/calories', { date, meal, food, calories, protein, carbs, fat, target });
 
     // Switch view to logged date
     document.getElementById('view-date').value = date;

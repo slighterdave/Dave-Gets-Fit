@@ -98,14 +98,8 @@
 <script>
   Auth.requireAuth();
 
-  const KEY = Auth.userKey('dgf_weights');
-
-  function getEntries() {
-    return Storage.get(KEY);
-  }
-
-  function saveEntries(list) {
-    Storage.set(KEY, list);
+  async function getEntries() {
+    return API.get('/weights').catch(() => []);
   }
 
   function renderStats(entries) {
@@ -157,7 +151,6 @@
 
     // newest first
     [...sorted].reverse().forEach((e, revIdx) => {
-      const origIdx = entries.indexOf(sorted[sorted.length - 1 - revIdx]);
       const prevIdx = sorted.length - 2 - revIdx;
       const prev = prevIdx >= 0 ? parseFloat(sorted[prevIdx].weight) : null;
       const curr = parseFloat(e.weight);
@@ -173,30 +166,28 @@
         <td><strong>${parseFloat(e.weight).toFixed(1)} kg</strong></td>
         <td>${changeStr}</td>
         <td>${e.notes || '—'}</td>
-        <td><button class="btn btn-danger" data-key="${e.date}">Delete</button></td>
+        <td><button class="btn btn-danger" data-date="${e.date}">Delete</button></td>
       `;
       tbody.appendChild(tr);
     });
 
-    tbody.querySelectorAll('[data-key]').forEach(btn => {
-      btn.addEventListener('click', function () {
-        const dateKey = this.dataset.key;
-        const list = getEntries().filter(e => e.date !== dateKey);
-        saveEntries(list);
+    tbody.querySelectorAll('[data-date]').forEach(btn => {
+      btn.addEventListener('click', async function () {
+        await API.del('/weights/' + this.dataset.date);
         render();
       });
     });
   }
 
-  function render() {
-    const entries = getEntries();
+  async function render() {
+    const entries = await getEntries();
     renderStats(entries);
     renderTable(entries);
   }
 
   // Pre-fill goal from last entry if available
-  function prefillGoal() {
-    const entries = getEntries();
+  async function prefillGoal() {
+    const entries = await getEntries();
     if (entries.length > 0) {
       const last = entries[entries.length - 1];
       if (last.goal) document.getElementById('goal-weight').value = last.goal;
@@ -206,7 +197,7 @@
   document.getElementById('entry-date').value = today();
   prefillGoal();
 
-  document.getElementById('weight-form').addEventListener('submit', function (e) {
+  document.getElementById('weight-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const date   = document.getElementById('entry-date').value;
     const weight = document.getElementById('weight-value').value;
@@ -218,9 +209,7 @@
       return;
     }
 
-    const list = getEntries().filter(en => en.date !== date); // replace if same date
-    list.push({ date, weight, goal, notes });
-    saveEntries(list);
+    await API.post('/weights', { date, weight, goal, notes });
 
     showAlert(document.getElementById('form-card'), 'Weight logged successfully!');
     document.getElementById('weight-value').value = '';
