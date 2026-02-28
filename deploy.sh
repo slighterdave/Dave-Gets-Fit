@@ -43,6 +43,8 @@ if [[ -d "${APP_DIR}/.git" ]]; then
 else
   echo "    Cloning repository..."
   rm -rf "${APP_DIR}"
+  mkdir -p "${APP_DIR}"
+  chown ubuntu:ubuntu "${APP_DIR}"
   sudo -u ubuntu git clone "${REPO_URL}" "${APP_DIR}"
 fi
 
