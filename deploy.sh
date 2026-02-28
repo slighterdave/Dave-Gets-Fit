@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-REPO_URL="git@github.com:slighterdave/Dave-Gets-Fit.git"
+REPO_URL="https://github.com/slighterdave/Dave-Gets-Fit.git"
 APP_DIR="/var/www/dave-gets-fit"
 NGINX_SITE="dave-gets-fit"
 NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE}"
