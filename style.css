@@ -391,3 +391,81 @@ tbody tr:hover {
     padding: 8px 0 4px;
   }
 }
+
+/* Login tab buttons */
+.tab-row {
+  display: flex;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #2e2e2e;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px 20px;
+  background: transparent;
+  color: #666;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-btn.active {
+  color: #cc1a1a;
+  border-bottom-color: #8b0000;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #999;
+}
+
+/* Nav user badge + logout */
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 8px;
+  padding-left: 14px;
+  border-left: 1px solid #3a3a3a;
+}
+
+.nav-username {
+  color: #888;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.btn-nav-logout {
+  background: transparent;
+  color: #555;
+  border: 1px solid #3a3a3a;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.btn-nav-logout:hover {
+  color: #cc1a1a;
+  border-color: #8b0000;
+}
+
+/* Inline form error message */
+.form-error {
+  color: #cc6666;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  min-height: 1.2em;
+  margin-bottom: 14px;
+}

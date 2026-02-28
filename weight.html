@@ -14,6 +14,10 @@
   <a href="progression.html">Progression</a>
   <a href="weight.html" class="active">Weight</a>
   <a href="calories.html">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
 </nav>
 
 <main>
@@ -92,7 +96,9 @@
 
 <script src="app.js"></script>
 <script>
-  const KEY = 'dgf_weights';
+  Auth.requireAuth();
+
+  const KEY = Auth.userKey('dgf_weights');
 
   function getEntries() {
     return Storage.get(KEY);

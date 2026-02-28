@@ -14,6 +14,10 @@
   <a href="progression.html">Progression</a>
   <a href="weight.html">Weight</a>
   <a href="calories.html">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
 </nav>
 
 <main>
@@ -41,7 +45,7 @@
   </div>
 
   <div class="card" id="signup-section">
-    <h2 style="margin-bottom:20px;color:#cc1a1a;">Create Your Account</h2>
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Set Up Your Profile</h2>
     <form id="signup-form" novalidate>
       <div class="form-row">
         <div class="form-group">
@@ -73,7 +77,7 @@
           </select>
         </div>
       </div>
-      <button type="submit" class="btn btn-primary">Sign Up</button>
+      <button type="submit" class="btn btn-primary">Save Profile</button>
     </form>
   </div>
 
@@ -86,7 +90,9 @@
 
 <script src="app.js"></script>
 <script>
-  const PROFILE_KEY = 'dgf_profile';
+  Auth.requireAuth();
+
+  const PROFILE_KEY = Auth.userKey('dgf_profile');
 
   function loadPage() {
     const profile = Storage.get(PROFILE_KEY);
@@ -111,7 +117,7 @@
     }
 
     const profile = { firstName, lastName, email, age, goal };
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    Storage.set(PROFILE_KEY, profile);
 
     document.getElementById('signup-section').style.display = 'none';
     document.getElementById('welcome-section').style.display = '';
@@ -119,8 +125,11 @@
   });
 
   document.getElementById('reset-btn').addEventListener('click', function () {
-    if (confirm('Are you sure you want to reset your account? All data will be cleared.')) {
-      localStorage.clear();
+    if (confirm('Reset all your fitness data? Your login account will remain active.')) {
+      const u = Auth.currentUser();
+      ['dgf_profile', 'dgf_workouts', 'dgf_weights', 'dgf_calories'].forEach(k => {
+        localStorage.removeItem(k + '_' + u);
+      });
       location.reload();
     }
   });
