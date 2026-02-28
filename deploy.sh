@@ -50,6 +50,7 @@ echo "==> Node.js version: $(node --version)"
 echo "==> npm version:     $(npm --version)"
 
 echo "==> Deploying application to ${APP_DIR}..."
+sudo -u ${APP_USER} git config --global --add safe.directory "${APP_DIR}"
 if [[ -d "${APP_DIR}/.git" ]]; then
   echo "    Repository already cloned – pulling latest changes..."
   sudo -u ${APP_USER} git -C "${APP_DIR}" fetch --all --prune
