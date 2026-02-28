@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Calorie Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">🤘 Dave Gets Fit</a>
+  <a href="index.html">Home</a>
+  <a href="progression.html">Progression</a>
+  <a href="weight.html">Weight</a>
+  <a href="calories.html" class="active">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+</nav>
+
+<main>
+  <h1>Calorie Tracker</h1>
+  <p class="subtitle">Keep a daily food diary and stay on top of your calorie intake.</p>
+
+  <div class="card" id="form-card">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Log a Meal</h2>
+    <form id="calorie-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="entry-date">Date</label>
+          <input type="date" id="entry-date" required />
+        </div>
+        <div class="form-group">
+          <label for="meal-type">Meal</label>
+          <select id="meal-type">
+            <option value="Breakfast">Breakfast</option>
+            <option value="Lunch">Lunch</option>
+            <option value="Dinner">Dinner</option>
+            <option value="Snack">Snack</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="food-name">Food / Drink</label>
+          <input type="text" id="food-name" placeholder="e.g. Chicken salad" required />
+        </div>
+        <div class="form-group">
+          <label for="calories">Calories (kcal)</label>
+          <input type="number" id="calories" placeholder="400" min="0" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="macro-protein">Protein (g)</label>
+          <input type="number" id="macro-protein" placeholder="0" min="0" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label for="macro-carbs">Carbs (g)</label>
+          <input type="number" id="macro-carbs" placeholder="0" min="0" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label for="macro-fat">Fat (g)</label>
+          <input type="number" id="macro-fat" placeholder="0" min="0" step="0.1" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="daily-target">Daily Calorie Target (kcal)</label>
+          <input type="number" id="daily-target" placeholder="2000" min="0" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Log Meal</button>
+    </form>
+  </div>
+
+  <!-- Date selector for history view -->
+  <div class="card" style="padding:16px 28px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <label for="view-date" style="font-weight:600;color:#999;">Viewing day:</label>
+      <input type="date" id="view-date" style="padding:6px 10px;border:1px solid #3a3a3a;border-radius:3px;font-size:0.95rem;background:#111;color:#d4d4d4;" />
+    </div>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card">
+      <div class="value" id="stat-total">0</div>
+      <div class="label">Calories Today (kcal)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-target">—</div>
+      <div class="label">Daily Target (kcal)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-remaining">—</div>
+      <div class="label">Remaining (kcal)</div>
+    </div>
+  </div>
+
+  <div class="card" id="progress-card">
+    <h2 style="margin-bottom:14px;color:#cc1a1a;">Daily Progress</h2>
+    <p id="progress-label" style="font-size:0.9rem;color:#888;margin-bottom:6px;"></p>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Macro stats -->
+  <div class="stats-row" id="macro-stats-row" style="display:none;">
+    <div class="stat-card">
+      <div class="value" id="stat-protein" style="color:#cc1a1a;">0g</div>
+      <div class="label">Protein</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-carbs" style="color:#cc7700;">0g</div>
+      <div class="label">Carbs</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-fat" style="color:#ccaa00;">0g</div>
+      <div class="label">Fat</div>
+    </div>
+  </div>
+
+  <!-- Macro pie chart -->
+  <div class="card" id="macro-chart-card" style="display:none;">
+    <h2 style="margin-bottom:16px;color:#cc1a1a;">Macro Breakdown</h2>
+    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap;">
+      <canvas id="macro-chart" width="200" height="200" style="flex-shrink:0;" role="img" aria-label="Macro nutrient distribution pie chart"></canvas>
+      <ul id="macro-legend" style="font-size:0.9rem;line-height:2;list-style:none;padding:0;margin:0;"></ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:16px;color:#cc1a1a;">Meals for Selected Day</h2>
+    <div class="empty-state" id="empty-msg">No meals logged for this day yet.</div>
+    <table id="calorie-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Meal</th>
+          <th>Food / Drink</th>
+          <th>Calories (kcal)</th>
+          <th>Protein (g)</th>
+          <th>Carbs (g)</th>
+          <th>Fat (g)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="calorie-tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  const KEY = Auth.userKey('dgf_calories');
+
+  function getEntries() {
+    return Storage.get(KEY);
+  }
+
+  function saveEntries(list) {
+    Storage.set(KEY, list);
+  }
+
+  function getViewDate() {
+    return document.getElementById('view-date').value;
+  }
+
+  function getTarget() {
+    const entries = getEntries();
+    // Use the most recently saved target
+    const withTarget = entries.filter(e => e.target);
+    if (withTarget.length === 0) return null;
+    return parseFloat(withTarget[withTarget.length - 1].target);
+  }
+
+  function renderStats(entries) {
+    const viewDate = getViewDate();
+    const dayEntries = entries.filter(e => e.date === viewDate);
+    const total = dayEntries.reduce((sum, e) => sum + parseFloat(e.calories || 0), 0);
+
+    document.getElementById('stat-total').textContent = total;
+
+    const target = getTarget();
+    if (target) {
+      const remaining = target - total;
+      document.getElementById('stat-target').textContent = target;
+      document.getElementById('stat-remaining').textContent = remaining >= 0 ? remaining : 'Over by ' + Math.abs(remaining);
+
+      const pct = Math.min(100, (total / target) * 100);
+      document.getElementById('progress-bar').style.width = pct.toFixed(1) + '%';
+      const bar = document.getElementById('progress-bar');
+      bar.classList.toggle('progress-bar-over', pct > 100);
+      document.getElementById('progress-label').textContent =
+        `${total} / ${target} kcal consumed (${pct.toFixed(0)}%)`;
+      document.getElementById('progress-card').style.display = '';
+    } else {
+      document.getElementById('stat-target').textContent = '—';
+      document.getElementById('stat-remaining').textContent = '—';
+      document.getElementById('progress-card').style.display = 'none';
+    }
+
+    // Macro totals
+    const protein = dayEntries.reduce((sum, e) => sum + parseFloat(e.protein || 0), 0);
+    const carbs   = dayEntries.reduce((sum, e) => sum + parseFloat(e.carbs   || 0), 0);
+    const fat     = dayEntries.reduce((sum, e) => sum + parseFloat(e.fat     || 0), 0);
+    const hasMacros = protein > 0 || carbs > 0 || fat > 0;
+
+    document.getElementById('stat-protein').textContent = protein.toFixed(1) + 'g';
+    document.getElementById('stat-carbs').textContent   = carbs.toFixed(1)   + 'g';
+    document.getElementById('stat-fat').textContent     = fat.toFixed(1)     + 'g';
+    document.getElementById('macro-stats-row').style.display  = hasMacros ? '' : 'none';
+    document.getElementById('macro-chart-card').style.display = hasMacros ? '' : 'none';
+
+    if (hasMacros) renderChart(protein, carbs, fat);
+  }
+
+  function renderChart(protein, carbs, fat) {
+    const canvas = document.getElementById('macro-chart');
+    const ctx = canvas.getContext('2d');
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const r  = Math.min(cx, cy) - 8;
+
+    const slices = [
+      { label: 'Protein', value: protein, color: '#cc1a1a' },
+      { label: 'Carbs',   value: carbs,   color: '#cc7700' },
+      { label: 'Fat',     value: fat,     color: '#ccaa00' },
+    ].filter(s => s.value > 0);
+
+    const total = slices.reduce((s, sl) => s + sl.value, 0);
+    if (total === 0) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let startAngle = -Math.PI / 2;
+
+    slices.forEach(sl => {
+      const sweep = (sl.value / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, startAngle, startAngle + sweep);
+      ctx.closePath();
+      ctx.fillStyle = sl.color;
+      ctx.fill();
+      ctx.strokeStyle = '#0d0d0d';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      startAngle += sweep;
+    });
+
+    // Legend
+    const legendEl = document.getElementById('macro-legend');
+    legendEl.innerHTML = slices.map(sl =>
+      `<li><span style="display:inline-block;width:12px;height:12px;background:${sl.color};border-radius:2px;margin-right:6px;vertical-align:middle;" aria-label="${sl.label} colour"></span>` +
+      `<strong style="color:#d4d4d4;">${sl.label}</strong> — ${sl.value.toFixed(1)}g (${((sl.value/total)*100).toFixed(0)}%)</li>`
+    ).join('');
+  }
+
+  function renderTable(entries) {
+    const viewDate = getViewDate();
+    const dayEntries = entries.filter(e => e.date === viewDate);
+    const emptyMsg = document.getElementById('empty-msg');
+    const table    = document.getElementById('calorie-table');
+    const tbody    = document.getElementById('calorie-tbody');
+
+    if (dayEntries.length === 0) {
+      emptyMsg.style.display = '';
+      table.style.display = 'none';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = '';
+
+    tbody.innerHTML = '';
+    dayEntries.forEach((e) => {
+      const globalIdx = entries.indexOf(e);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${e.meal}</td>
+        <td>${e.food}</td>
+        <td><strong>${parseFloat(e.calories).toFixed(0)}</strong></td>
+        <td>${e.protein ? parseFloat(e.protein).toFixed(1) : '—'}</td>
+        <td>${e.carbs   ? parseFloat(e.carbs).toFixed(1)   : '—'}</td>
+        <td>${e.fat     ? parseFloat(e.fat).toFixed(1)     : '—'}</td>
+        <td><button class="btn btn-danger" data-idx="${globalIdx}">Delete</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-idx]').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const i = parseInt(this.dataset.idx, 10);
+        const list = getEntries();
+        list.splice(i, 1);
+        saveEntries(list);
+        render();
+      });
+    });
+  }
+
+  function render() {
+    const entries = getEntries();
+    renderStats(entries);
+    renderTable(entries);
+  }
+
+  // Pre-fill target from saved data
+  function prefillTarget() {
+    const target = getTarget();
+    if (target) document.getElementById('daily-target').value = target;
+  }
+
+  document.getElementById('entry-date').value = today();
+  document.getElementById('view-date').value  = today();
+  prefillTarget();
+
+  document.getElementById('view-date').addEventListener('change', render);
+
+  document.getElementById('calorie-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date     = document.getElementById('entry-date').value;
+    const meal     = document.getElementById('meal-type').value;
+    const food     = document.getElementById('food-name').value.trim();
+    const calories = document.getElementById('calories').value;
+    const protein  = document.getElementById('macro-protein').value;
+    const carbs    = document.getElementById('macro-carbs').value;
+    const fat      = document.getElementById('macro-fat').value;
+    const target   = document.getElementById('daily-target').value;
+
+    if (!date || !food || calories === '') {
+      alert('Please fill in date, food name, and calories.');
+      return;
+    }
+
+    const list = getEntries();
+    list.push({ date, meal, food, calories, protein, carbs, fat, target });
+    saveEntries(list);
+
+    // Switch view to logged date
+    document.getElementById('view-date').value = date;
+
+    showAlert(document.getElementById('form-card'), 'Meal logged successfully!');
+    document.getElementById('food-name').value     = '';
+    document.getElementById('calories').value      = '';
+    document.getElementById('macro-protein').value = '';
+    document.getElementById('macro-carbs').value   = '';
+    document.getElementById('macro-fat').value     = '';
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

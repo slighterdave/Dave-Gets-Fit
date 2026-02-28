@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Weight Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">🤘 Dave Gets Fit</a>
+  <a href="index.html">Home</a>
+  <a href="progression.html">Progression</a>
+  <a href="weight.html" class="active">Weight</a>
+  <a href="calories.html">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+</nav>
+
+<main>
+  <h1>Weight Tracker</h1>
+  <p class="subtitle">Record your weight and track your progress toward your goal.</p>
+
+  <div class="card" id="form-card">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Log Your Weight</h2>
+    <form id="weight-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="entry-date">Date</label>
+          <input type="date" id="entry-date" required />
+        </div>
+        <div class="form-group">
+          <label for="weight-value">Weight (kg)</label>
+          <input type="number" id="weight-value" placeholder="75.0" min="1" step="0.1" required />
+        </div>
+        <div class="form-group">
+          <label for="goal-weight">Goal Weight (kg)</label>
+          <input type="number" id="goal-weight" placeholder="70.0" min="1" step="0.1" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="weight-notes">Notes (optional)</label>
+        <input type="text" id="weight-notes" placeholder="e.g. after breakfast" />
+      </div>
+      <button type="submit" class="btn btn-primary">Log Weight</button>
+    </form>
+  </div>
+
+  <div class="stats-row" id="stats-row" style="display:none;">
+    <div class="stat-card">
+      <div class="value" id="stat-current">—</div>
+      <div class="label">Current (kg)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-start">—</div>
+      <div class="label">Starting (kg)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-change">—</div>
+      <div class="label">Total Change (kg)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-goal">—</div>
+      <div class="label">Goal (kg)</div>
+    </div>
+  </div>
+
+  <div class="card" id="progress-card" style="display:none;">
+    <h2 style="margin-bottom:14px;color:#cc1a1a;">Goal Progress</h2>
+    <p id="progress-label" style="font-size:0.9rem;color:#888;margin-bottom:6px;"></p>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:16px;color:#cc1a1a;">Weight History</h2>
+    <div class="empty-state" id="empty-msg">No weight entries yet. Log your first one above!</div>
+    <table id="weight-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Weight (kg)</th>
+          <th>Change</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="weight-tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  const KEY = Auth.userKey('dgf_weights');
+
+  function getEntries() {
+    return Storage.get(KEY);
+  }
+
+  function saveEntries(list) {
+    Storage.set(KEY, list);
+  }
+
+  function renderStats(entries) {
+    const statsRow = document.getElementById('stats-row');
+    if (entries.length === 0) { statsRow.style.display = 'none'; return; }
+    statsRow.style.display = '';
+
+    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+    const current = parseFloat(sorted[sorted.length - 1].weight);
+    const start   = parseFloat(sorted[0].weight);
+    const change  = (current - start).toFixed(1);
+    const goal    = sorted[sorted.length - 1].goal || '';
+
+    document.getElementById('stat-current').textContent = current.toFixed(1);
+    document.getElementById('stat-start').textContent   = start.toFixed(1);
+    document.getElementById('stat-change').textContent  = (change > 0 ? '+' : '') + change;
+    document.getElementById('stat-goal').textContent    = goal ? parseFloat(goal).toFixed(1) : '—';
+
+    // Progress bar
+    const progressCard = document.getElementById('progress-card');
+    if (goal) {
+      progressCard.style.display = '';
+      const goalNum = parseFloat(goal);
+      const diff = start - goalNum;
+      let pct = diff !== 0 ? Math.min(100, Math.max(0, ((start - current) / diff) * 100)) : 100;
+      document.getElementById('progress-bar').style.width = pct.toFixed(1) + '%';
+      document.getElementById('progress-label').textContent =
+        `${pct.toFixed(0)}% of the way from ${start.toFixed(1)} kg to goal ${goalNum.toFixed(1)} kg`;
+    } else {
+      progressCard.style.display = 'none';
+    }
+  }
+
+  function renderTable(entries) {
+    const emptyMsg = document.getElementById('empty-msg');
+    const table    = document.getElementById('weight-table');
+    const tbody    = document.getElementById('weight-tbody');
+
+    if (entries.length === 0) {
+      emptyMsg.style.display = '';
+      table.style.display = 'none';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = '';
+
+    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+    tbody.innerHTML = '';
+
+    // newest first
+    [...sorted].reverse().forEach((e, revIdx) => {
+      const origIdx = entries.indexOf(sorted[sorted.length - 1 - revIdx]);
+      const prevIdx = sorted.length - 2 - revIdx;
+      const prev = prevIdx >= 0 ? parseFloat(sorted[prevIdx].weight) : null;
+      const curr = parseFloat(e.weight);
+      let changeStr = '—';
+      if (prev !== null) {
+        const diff = (curr - prev).toFixed(1);
+        changeStr = (parseFloat(diff) > 0 ? '+' : '') + diff + ' kg';
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${formatDate(e.date)}</td>
+        <td><strong>${parseFloat(e.weight).toFixed(1)} kg</strong></td>
+        <td>${changeStr}</td>
+        <td>${e.notes || '—'}</td>
+        <td><button class="btn btn-danger" data-key="${e.date}">Delete</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-key]').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const dateKey = this.dataset.key;
+        const list = getEntries().filter(e => e.date !== dateKey);
+        saveEntries(list);
+        render();
+      });
+    });
+  }
+
+  function render() {
+    const entries = getEntries();
+    renderStats(entries);
+    renderTable(entries);
+  }
+
+  // Pre-fill goal from last entry if available
+  function prefillGoal() {
+    const entries = getEntries();
+    if (entries.length > 0) {
+      const last = entries[entries.length - 1];
+      if (last.goal) document.getElementById('goal-weight').value = last.goal;
+    }
+  }
+
+  document.getElementById('entry-date').value = today();
+  prefillGoal();
+
+  document.getElementById('weight-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date   = document.getElementById('entry-date').value;
+    const weight = document.getElementById('weight-value').value;
+    const goal   = document.getElementById('goal-weight').value;
+    const notes  = document.getElementById('weight-notes').value.trim();
+
+    if (!date || !weight) {
+      alert('Please enter a date and weight.');
+      return;
+    }
+
+    const list = getEntries().filter(en => en.date !== date); // replace if same date
+    list.push({ date, weight, goal, notes });
+    saveEntries(list);
+
+    showAlert(document.getElementById('form-card'), 'Weight logged successfully!');
+    document.getElementById('weight-value').value = '';
+    document.getElementById('weight-notes').value = '';
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

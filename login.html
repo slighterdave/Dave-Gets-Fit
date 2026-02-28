@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Login</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="login.html">🤘 Dave Gets Fit</a>
+</nav>
+
+<main style="max-width:460px;">
+  <div class="hero" style="padding:40px 0 28px;">
+    <h1>Welcome</h1>
+    <p>Log in or create an account to start tracking.</p>
+  </div>
+
+  <div class="card" id="auth-card">
+    <div class="tab-row">
+      <button class="tab-btn active" id="tab-login" onclick="showTab('login')">Log In</button>
+      <button class="tab-btn" id="tab-register" onclick="showTab('register')">Register</button>
+    </div>
+
+    <!-- Login form -->
+    <form id="login-form" novalidate>
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="your_username" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </div>
+      <div class="form-error" id="login-error"></div>
+      <button type="submit" class="btn btn-primary">Log In</button>
+    </form>
+
+    <!-- Register form -->
+    <form id="register-form" novalidate style="display:none;">
+      <div class="form-group">
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" placeholder="choose_a_username" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" autocomplete="new-password" required />
+      </div>
+      <div class="form-group">
+        <label for="reg-confirm">Confirm Password</label>
+        <input type="password" id="reg-confirm" autocomplete="new-password" required />
+      </div>
+      <div class="form-error" id="reg-error"></div>
+      <button type="submit" class="btn btn-primary">Create Account</button>
+    </form>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  // Already logged in → go straight to the dashboard
+  if (Auth.currentUser()) window.location.href = 'index.html';
+
+  function showTab(tab) {
+    const isLogin = tab === 'login';
+    document.getElementById('login-form').style.display    = isLogin ? '' : 'none';
+    document.getElementById('register-form').style.display = isLogin ? 'none' : '';
+    document.getElementById('tab-login').classList.toggle('active', isLogin);
+    document.getElementById('tab-register').classList.toggle('active', !isLogin);
+    document.getElementById('login-error').textContent = '';
+    document.getElementById('reg-error').textContent   = '';
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl    = document.getElementById('login-error');
+    errEl.textContent = '';
+    if (!username || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
+    const result = await Auth.login(username, password);
+    if (!result.ok) { errEl.textContent = result.error; return; }
+    window.location.href = 'index.html';
+  });
+
+  document.getElementById('register-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const confirm  = document.getElementById('reg-confirm').value;
+    const errEl    = document.getElementById('reg-error');
+    errEl.textContent = '';
+
+    if (!username || !password || !confirm) { errEl.textContent = 'Please fill in all fields.'; return; }
+    if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+    if (password !== confirm) { errEl.textContent = 'Passwords do not match.'; return; }
+
+    const result = await Auth.register(username, password);
+    if (!result.ok) { errEl.textContent = result.error; return; }
+    await Auth.login(username, password);
+    window.location.href = 'index.html';
+  });
+</script>
+</body>
+</html>

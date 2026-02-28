@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Home</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">🤘 Dave Gets Fit</a>
+  <a href="index.html" class="active">Home</a>
+  <a href="progression.html">Progression</a>
+  <a href="weight.html">Weight</a>
+  <a href="calories.html">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+</nav>
+
+<main>
+  <div class="hero">
+    <h1>Welcome to Dave Gets Fit</h1>
+    <p>Your personal fitness tracker. Sign up below to get started on your journey.</p>
+  </div>
+
+  <div class="features">
+    <div class="feature-card">
+      <div class="icon">📈</div>
+      <h3>Progression</h3>
+      <p>Log your workouts and track personal bests over time.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">⚖️</div>
+      <h3>Weight</h3>
+      <p>Record your weight and visualise your progress toward your goal.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🍎</div>
+      <h3>Calories</h3>
+      <p>Keep a daily food diary and stay on top of your calorie intake.</p>
+    </div>
+  </div>
+
+  <div class="card" id="signup-section">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Set Up Your Profile</h2>
+    <form id="signup-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first-name">First Name</label>
+          <input type="text" id="first-name" placeholder="Dave" required />
+        </div>
+        <div class="form-group">
+          <label for="last-name">Last Name</label>
+          <input type="text" id="last-name" placeholder="Smith" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="dave@example.com" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="age">Age</label>
+          <input type="number" id="age" placeholder="30" min="1" max="120" />
+        </div>
+        <div class="form-group">
+          <label for="goal">Fitness Goal</label>
+          <select id="goal">
+            <option value="">Select a goal…</option>
+            <option value="lose-weight">Lose weight</option>
+            <option value="gain-muscle">Gain muscle</option>
+            <option value="improve-fitness">Improve fitness</option>
+            <option value="maintain">Maintain current fitness</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save Profile</button>
+    </form>
+  </div>
+
+  <div class="card" id="welcome-section" style="display:none;">
+    <h2 style="color:#cc1a1a;">Welcome back, <span id="welcome-name"></span>! 👋</h2>
+    <p style="margin-top:10px;color:#888;">Your account is set up and ready to go. Use the navigation above to start tracking.</p>
+    <button class="btn btn-danger" id="reset-btn" style="margin-top:16px;">Reset Account</button>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  const PROFILE_KEY = Auth.userKey('dgf_profile');
+
+  function loadPage() {
+    const profile = Storage.get(PROFILE_KEY);
+    if (profile && profile.firstName) {
+      document.getElementById('signup-section').style.display = 'none';
+      document.getElementById('welcome-section').style.display = '';
+      document.getElementById('welcome-name').textContent = profile.firstName;
+    }
+  }
+
+  document.getElementById('signup-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const firstName = document.getElementById('first-name').value.trim();
+    const lastName  = document.getElementById('last-name').value.trim();
+    const email     = document.getElementById('email').value.trim();
+    const age       = document.getElementById('age').value;
+    const goal      = document.getElementById('goal').value;
+
+    if (!firstName || !email) {
+      alert('Please fill in at least your first name and email.');
+      return;
+    }
+
+    const profile = { firstName, lastName, email, age, goal };
+    Storage.set(PROFILE_KEY, profile);
+
+    document.getElementById('signup-section').style.display = 'none';
+    document.getElementById('welcome-section').style.display = '';
+    document.getElementById('welcome-name').textContent = firstName;
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', function () {
+    if (confirm('Reset all your fitness data? Your login account will remain active.')) {
+      const u = Auth.currentUser();
+      ['dgf_profile', 'dgf_workouts', 'dgf_weights', 'dgf_calories'].forEach(k => {
+        localStorage.removeItem(k + '_' + u);
+      });
+      location.reload();
+    }
+  });
+
+  loadPage();
+</script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Progression Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">🤘 Dave Gets Fit</a>
+  <a href="index.html">Home</a>
+  <a href="progression.html" class="active">Progression</a>
+  <a href="weight.html">Weight</a>
+  <a href="calories.html">Calories</a>
+  <div class="nav-user">
+    <span class="nav-username" id="nav-username-display"></span>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+</nav>
+
+<main>
+  <h1>Progression Tracker</h1>
+  <p class="subtitle">Build your workout, track your lifts, and see your strength grow.</p>
+
+  <!-- ── Progression Chart ──────────────────────────────── -->
+  <div class="card" id="chart-card" style="display:none;">
+    <div class="chart-header">
+      <h2 style="color:#cc1a1a;">Progression Chart</h2>
+      <div class="form-group" style="margin:0;min-width:200px;">
+        <select id="chart-exercise-select"></select>
+      </div>
+    </div>
+    <canvas id="progression-canvas" height="220" style="width:100%;margin-top:16px;"></canvas>
+  </div>
+
+  <!-- ── Stats row ─────────────────────────────────────── -->
+  <div class="stats-row" id="stats-row" style="display:none;">
+    <div class="stat-card">
+      <div class="value" id="stat-total">0</div>
+      <div class="label">Total Workouts</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-exercises">0</div>
+      <div class="label">Unique Exercises</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-this-week">0</div>
+      <div class="label">This Week</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-pb">—</div>
+      <div class="label">Personal Best (kg)</div>
+    </div>
+  </div>
+
+  <!-- ── Create Workout ────────────────────────────────── -->
+  <div class="card" id="form-card">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Create Workout</h2>
+    <form id="workout-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="workout-date">Date</label>
+          <input type="date" id="workout-date" required />
+        </div>
+        <div class="form-group">
+          <label for="workout-notes">Notes (optional)</label>
+          <input type="text" id="workout-notes" placeholder="e.g. Felt strong today" />
+        </div>
+      </div>
+
+      <!-- Exercise rows -->
+      <div id="exercise-list"></div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">
+        <button type="button" class="btn btn-secondary" id="add-exercise-btn">+ Add Exercise</button>
+        <button type="submit" class="btn btn-primary">Log Workout</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Workout History ───────────────────────────────── -->
+  <div class="card">
+    <h2 style="margin-bottom:16px;color:#cc1a1a;">Workout History</h2>
+    <div class="empty-state" id="empty-msg">No workouts logged yet. Create your first one above!</div>
+    <div id="history-list"></div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  const KEY = Auth.userKey('dgf_workouts');
+
+  function getSessions() { return Storage.get(KEY); }
+  function saveSessions(list) { Storage.set(KEY, list); }
+
+  function startOfWeek() {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split('T')[0];
+  }
+
+  /* ── Exercise row builder ──────────────────────────── */
+  let rowCount = 0;
+
+  function addExerciseRow(name = '', sets = '', reps = '', weightKg = '') {
+    rowCount++;
+    const id = rowCount;
+    const container = document.getElementById('exercise-list');
+    const div = document.createElement('div');
+    div.className = 'exercise-row';
+    div.dataset.rowId = id;
+    div.innerHTML = `
+      <div class="exercise-row-fields">
+        <div class="form-group" style="flex:2;">
+          <label>Exercise</label>
+          <input type="text" class="ex-name" placeholder="e.g. Bench Press" value="${name}" required />
+        </div>
+        <div class="form-group">
+          <label>Sets</label>
+          <input type="number" class="ex-sets" placeholder="3" min="1" value="${sets}" />
+        </div>
+        <div class="form-group">
+          <label>Reps</label>
+          <input type="number" class="ex-reps" placeholder="10" min="1" value="${reps}" />
+        </div>
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" class="ex-weight" placeholder="60" min="0" step="0.5" value="${weightKg}" />
+        </div>
+        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">✕</button>
+      </div>
+    `;
+    div.querySelector('.btn-remove-exercise').addEventListener('click', () => {
+      div.remove();
+      if (document.querySelectorAll('.exercise-row').length === 0) addExerciseRow();
+    });
+    container.appendChild(div);
+  }
+
+  document.getElementById('add-exercise-btn').addEventListener('click', () => addExerciseRow());
+
+  /* ── Stats ─────────────────────────────────────────── */
+  function renderStats(sessions) {
+    const statsRow = document.getElementById('stats-row');
+    if (sessions.length === 0) { statsRow.style.display = 'none'; return; }
+    statsRow.style.display = '';
+
+    document.getElementById('stat-total').textContent = sessions.length;
+
+    const allExercises = sessions.flatMap(s => s.exercises.map(e => e.name.toLowerCase()));
+    document.getElementById('stat-exercises').textContent = new Set(allExercises).size;
+
+    const sow = startOfWeek();
+    document.getElementById('stat-this-week').textContent = sessions.filter(s => s.date >= sow).length;
+
+    const allWeights = sessions.flatMap(s => s.exercises.map(e => parseFloat(e.weightKg) || 0));
+    const pb = allWeights.length ? Math.max(...allWeights) : 0;
+    document.getElementById('stat-pb').textContent = pb > 0 ? pb.toFixed(1) : '—';
+  }
+
+  /* ── Progression Chart ─────────────────────────────── */
+  function allExerciseNames(sessions) {
+    const names = new Set();
+    sessions.forEach(s => s.exercises.forEach(e => { if (e.name) names.add(e.name); }));
+    return [...names].sort();
+  }
+
+  function drawChart(sessions) {
+    const chartCard = document.getElementById('chart-card');
+    const sel = document.getElementById('chart-exercise-select');
+    const names = allExerciseNames(sessions);
+
+    if (names.length === 0) { chartCard.style.display = 'none'; return; }
+    chartCard.style.display = '';
+
+    // Repopulate select
+    const prev = sel.value;
+    sel.innerHTML = names.map(n => `<option value="${n}"${n === prev ? ' selected' : ''}>${n}</option>`).join('');
+    const chosen = sel.value;
+
+    const chosenLower = chosen.toLowerCase();
+
+    // Build data: for each session that contains this exercise, take max weight
+    const points = [];
+    sessions.forEach(s => {
+      const matches = s.exercises.filter(e => e.name.toLowerCase() === chosenLower && parseFloat(e.weightKg) > 0);
+      if (matches.length > 0) {
+        const maxW = Math.max(...matches.map(e => parseFloat(e.weightKg)));
+        points.push({ date: s.date, weight: maxW });
+      }
+    });
+    points.sort((a, b) => a.date.localeCompare(b.date));
+
+    const canvas = document.getElementById('progression-canvas');
+    canvas.width = canvas.parentElement.clientWidth || 800;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PAD = { top: 20, right: 20, bottom: 48, left: 56 };
+    const cW = W - PAD.left - PAD.right;
+    const cH = H - PAD.top - PAD.bottom;
+
+    ctx.clearRect(0, 0, W, H);
+
+    if (points.length === 0) {
+      ctx.fillStyle = '#555';
+      ctx.font = '14px Oswald, Impact, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No weight data for this exercise yet', W / 2, H / 2);
+      return;
+    }
+
+    const weights = points.map(p => p.weight);
+    const minW = Math.min(...weights);
+    const maxW = Math.max(...weights);
+    const wRange = maxW === minW ? 1 : maxW - minW;
+
+    function xOf(i) { return PAD.left + (points.length === 1 ? cW / 2 : (i / (points.length - 1)) * cW); }
+    function yOf(w) { return PAD.top + cH - ((w - minW) / wRange) * cH; }
+
+    // Grid lines
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = PAD.top + (cH / 4) * i;
+      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+      const label = (maxW - (wRange / 4) * i).toFixed(1);
+      ctx.fillStyle = '#666';
+      ctx.font = '11px Oswald, Impact, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(label + ' kg', PAD.left - 6, y + 4);
+    }
+
+    // X axis labels
+    ctx.fillStyle = '#666';
+    ctx.font = '11px Oswald, Impact, sans-serif';
+    ctx.textAlign = 'center';
+    const maxLabels = Math.min(points.length, 8);
+    const step = Math.max(1, Math.floor(points.length / maxLabels));
+    for (let i = 0; i < points.length; i += step) {
+      ctx.fillText(formatDate(points[i].date), xOf(i), H - PAD.bottom + 18);
+    }
+
+    // Gradient fill under line
+    const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+    grad.addColorStop(0, 'rgba(204,26,26,0.35)');
+    grad.addColorStop(1, 'rgba(204,26,26,0)');
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(points[0].weight));
+    points.forEach((p, i) => { if (i > 0) ctx.lineTo(xOf(i), yOf(p.weight)); });
+    ctx.lineTo(xOf(points.length - 1), PAD.top + cH);
+    ctx.lineTo(xOf(0), PAD.top + cH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#cc1a1a';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    points.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(xOf(0), yOf(p.weight));
+      else ctx.lineTo(xOf(i), yOf(p.weight));
+    });
+    ctx.stroke();
+
+    // Dots + tooltips via title overlay
+    points.forEach((p, i) => {
+      const x = xOf(i), y = yOf(p.weight);
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#cc1a1a';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // Personal best annotation
+    const pbIdx = weights.indexOf(maxW);
+    if (pbIdx >= 0) {
+      const x = xOf(pbIdx), y = yOf(maxW);
+      ctx.fillStyle = '#ffcc00';
+      ctx.font = 'bold 11px Oswald, Impact, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('PB ' + maxW.toFixed(1) + ' kg', x, y - 12);
+    }
+  }
+
+  document.getElementById('chart-exercise-select').addEventListener('change', () => {
+    drawChart(getSessions());
+  });
+
+  /* ── History ───────────────────────────────────────── */
+  function renderHistory(sessions) {
+    const emptyMsg = document.getElementById('empty-msg');
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+
+    if (sessions.length === 0) {
+      emptyMsg.style.display = '';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    [...sessions].reverse().forEach((session, revIdx) => {
+      const origIdx = sessions.length - 1 - revIdx;
+      const blockId = 'session-' + origIdx;
+
+      const div = document.createElement('div');
+      div.className = 'session-block';
+      div.innerHTML = `
+        <div class="session-header" data-target="${blockId}">
+          <span class="session-date">${formatDate(session.date)}</span>
+          <span class="session-meta">${session.exercises.length} exercise${session.exercises.length !== 1 ? 's' : ''}${session.notes ? ' · ' + session.notes : ''}</span>
+          <span class="session-toggle">▼</span>
+          <button class="btn btn-danger btn-delete-session" data-idx="${origIdx}">Delete</button>
+        </div>
+        <div class="session-body" id="${blockId}">
+          <table>
+            <thead>
+              <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th></tr>
+            </thead>
+            <tbody>
+              ${session.exercises.map(e => `
+                <tr>
+                  <td><strong>${e.name}</strong></td>
+                  <td>${e.sets || '—'}</td>
+                  <td>${e.reps || '—'}</td>
+                  <td>${parseFloat(e.weightKg) > 0 ? parseFloat(e.weightKg).toFixed(1) : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      div.querySelector('.session-header').addEventListener('click', function () {
+        const body = document.getElementById(this.dataset.target);
+        const isOpen = body.classList.toggle('open');
+        this.querySelector('.session-toggle').textContent = isOpen ? '▲' : '▼';
+      });
+
+      div.querySelector('.btn-delete-session').addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        const i = parseInt(this.dataset.idx, 10);
+        const list = getSessions();
+        list.splice(i, 1);
+        saveSessions(list);
+        render();
+      });
+
+      list.appendChild(div);
+    });
+  }
+
+  /* ── Main render ───────────────────────────────────── */
+  function render() {
+    const sessions = getSessions();
+    renderStats(sessions);
+    drawChart(sessions);
+    renderHistory(sessions);
+  }
+
+  /* ── Form submit ───────────────────────────────────── */
+  document.getElementById('workout-date').value = today();
+  addExerciseRow();
+
+  document.getElementById('workout-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date  = document.getElementById('workout-date').value;
+    const notes = document.getElementById('workout-notes').value.trim();
+
+    if (!date) { alert('Please pick a date.'); return; }
+
+    const rows = document.querySelectorAll('.exercise-row');
+    const exercises = [];
+    let valid = true;
+    rows.forEach(row => {
+      const name = row.querySelector('.ex-name').value.trim();
+      if (!name) { valid = false; return; }
+      exercises.push({
+        name,
+        sets:     row.querySelector('.ex-sets').value,
+        reps:     row.querySelector('.ex-reps').value,
+        weightKg: row.querySelector('.ex-weight').value,
+      });
+    });
+
+    if (!valid || exercises.length === 0) {
+      alert('Please give every exercise a name.');
+      return;
+    }
+
+    const sessions = getSessions();
+    sessions.push({ id: sessions.length + '_' + Date.now(), date, notes, exercises });
+    saveSessions(sessions);
+
+    showAlert(document.getElementById('form-card'), 'Workout logged successfully!');
+    document.getElementById('exercise-list').innerHTML = '';
+    document.getElementById('workout-notes').value = '';
+    document.getElementById('workout-date').value = today();
+    rowCount = 0;
+    addExerciseRow();
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
