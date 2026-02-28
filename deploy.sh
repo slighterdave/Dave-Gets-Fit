@@ -38,12 +38,12 @@ apt-get install -y -qq git nginx
 echo "==> Deploying application to ${APP_DIR}..."
 if [[ -d "${APP_DIR}/.git" ]]; then
   echo "    Repository already cloned – pulling latest changes..."
-  git -C "${APP_DIR}" fetch --all --prune
-  git -C "${APP_DIR}" reset --hard origin/main
+  sudo -u ubuntu git -C "${APP_DIR}" fetch --all --prune
+  sudo -u ubuntu git -C "${APP_DIR}" reset --hard origin/main
 else
   echo "    Cloning repository..."
   rm -rf "${APP_DIR}"
-  git clone "${REPO_URL}" "${APP_DIR}"
+  sudo -u ubuntu git clone "${REPO_URL}" "${APP_DIR}"
 fi
 
 echo "==> Setting file permissions..."
