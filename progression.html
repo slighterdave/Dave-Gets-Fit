@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Progression Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">💪 Dave Gets Fit</a>
+  <a href="index.html">Home</a>
+  <a href="progression.html" class="active">Progression</a>
+  <a href="weight.html">Weight</a>
+  <a href="calories.html">Calories</a>
+</nav>
+
+<main>
+  <h1>Progression Tracker</h1>
+  <p class="subtitle">Log your workouts and track personal bests over time.</p>
+
+  <div class="card" id="form-card">
+    <h2 style="margin-bottom:20px;color:#1a5c36;">Log a Workout</h2>
+    <form id="workout-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="workout-date">Date</label>
+          <input type="date" id="workout-date" required />
+        </div>
+        <div class="form-group">
+          <label for="exercise">Exercise</label>
+          <input type="text" id="exercise" placeholder="e.g. Bench Press" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sets">Sets</label>
+          <input type="number" id="sets" placeholder="3" min="1" />
+        </div>
+        <div class="form-group">
+          <label for="reps">Reps</label>
+          <input type="number" id="reps" placeholder="10" min="1" />
+        </div>
+        <div class="form-group">
+          <label for="weight-kg">Weight (kg)</label>
+          <input type="number" id="weight-kg" placeholder="60" min="0" step="0.5" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="notes">Notes (optional)</label>
+        <input type="text" id="notes" placeholder="How did it feel?" />
+      </div>
+      <button type="submit" class="btn btn-primary">Log Workout</button>
+    </form>
+  </div>
+
+  <div class="stats-row" id="stats-row" style="display:none;">
+    <div class="stat-card">
+      <div class="value" id="stat-total">0</div>
+      <div class="label">Total Workouts</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-exercises">0</div>
+      <div class="label">Unique Exercises</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-this-week">0</div>
+      <div class="label">This Week</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:16px;color:#1a5c36;">Workout History</h2>
+    <div id="table-wrap">
+      <div class="empty-state" id="empty-msg">No workouts logged yet. Add your first one above!</div>
+      <table id="workout-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Exercise</th>
+            <th>Sets</th>
+            <th>Reps</th>
+            <th>Weight (kg)</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="workout-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  const KEY = 'dgf_workouts';
+
+  function getWorkouts() {
+    return Storage.get(KEY);
+  }
+
+  function saveWorkouts(list) {
+    Storage.set(KEY, list);
+  }
+
+  function startOfWeek() {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split('T')[0];
+  }
+
+  function renderStats(workouts) {
+    const statsRow = document.getElementById('stats-row');
+    if (workouts.length === 0) { statsRow.style.display = 'none'; return; }
+    statsRow.style.display = '';
+
+    document.getElementById('stat-total').textContent = workouts.length;
+    const unique = new Set(workouts.map(w => w.exercise.toLowerCase())).size;
+    document.getElementById('stat-exercises').textContent = unique;
+    const sow = startOfWeek();
+    const thisWeek = workouts.filter(w => w.date >= sow).length;
+    document.getElementById('stat-this-week').textContent = thisWeek;
+  }
+
+  function renderTable(workouts) {
+    const emptyMsg = document.getElementById('empty-msg');
+    const table    = document.getElementById('workout-table');
+    const tbody    = document.getElementById('workout-tbody');
+
+    if (workouts.length === 0) {
+      emptyMsg.style.display = '';
+      table.style.display = 'none';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = '';
+
+    tbody.innerHTML = '';
+    // show newest first
+    [...workouts].reverse().forEach((w, revIdx) => {
+      const idx = workouts.length - 1 - revIdx;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${formatDate(w.date)}</td>
+        <td><strong>${w.exercise}</strong></td>
+        <td>${w.sets || '—'}</td>
+        <td>${w.reps || '—'}</td>
+        <td>${w.weightKg !== '' ? w.weightKg : '—'}</td>
+        <td>${w.notes || '—'}</td>
+        <td><button class="btn btn-danger" data-idx="${idx}">Delete</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-idx]').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const i = parseInt(this.dataset.idx, 10);
+        const list = getWorkouts();
+        list.splice(i, 1);
+        saveWorkouts(list);
+        render();
+      });
+    });
+  }
+
+  function render() {
+    const workouts = getWorkouts();
+    renderStats(workouts);
+    renderTable(workouts);
+  }
+
+  // Default date to today
+  document.getElementById('workout-date').value = today();
+
+  document.getElementById('workout-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date     = document.getElementById('workout-date').value;
+    const exercise = document.getElementById('exercise').value.trim();
+    const sets     = document.getElementById('sets').value;
+    const reps     = document.getElementById('reps').value;
+    const weightKg = document.getElementById('weight-kg').value;
+    const notes    = document.getElementById('notes').value.trim();
+
+    if (!date || !exercise) {
+      alert('Please enter at least a date and exercise name.');
+      return;
+    }
+
+    const list = getWorkouts();
+    list.push({ date, exercise, sets, reps, weightKg, notes });
+    saveWorkouts(list);
+
+    showAlert(document.getElementById('form-card'), 'Workout logged successfully!');
+    this.reset();
+    document.getElementById('workout-date').value = today();
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

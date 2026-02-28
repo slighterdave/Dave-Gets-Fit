@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dave Gets Fit – Calorie Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html">💪 Dave Gets Fit</a>
+  <a href="index.html">Home</a>
+  <a href="progression.html">Progression</a>
+  <a href="weight.html">Weight</a>
+  <a href="calories.html" class="active">Calories</a>
+</nav>
+
+<main>
+  <h1>Calorie Tracker</h1>
+  <p class="subtitle">Keep a daily food diary and stay on top of your calorie intake.</p>
+
+  <div class="card" id="form-card">
+    <h2 style="margin-bottom:20px;color:#1a5c36;">Log a Meal</h2>
+    <form id="calorie-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="entry-date">Date</label>
+          <input type="date" id="entry-date" required />
+        </div>
+        <div class="form-group">
+          <label for="meal-type">Meal</label>
+          <select id="meal-type">
+            <option value="Breakfast">Breakfast</option>
+            <option value="Lunch">Lunch</option>
+            <option value="Dinner">Dinner</option>
+            <option value="Snack">Snack</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="food-name">Food / Drink</label>
+          <input type="text" id="food-name" placeholder="e.g. Chicken salad" required />
+        </div>
+        <div class="form-group">
+          <label for="calories">Calories (kcal)</label>
+          <input type="number" id="calories" placeholder="400" min="0" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="daily-target">Daily Calorie Target (kcal)</label>
+          <input type="number" id="daily-target" placeholder="2000" min="0" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Log Meal</button>
+    </form>
+  </div>
+
+  <!-- Date selector for history view -->
+  <div class="card" style="padding:16px 28px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <label for="view-date" style="font-weight:600;color:#444;">Viewing day:</label>
+      <input type="date" id="view-date" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:0.95rem;" />
+    </div>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card">
+      <div class="value" id="stat-total">0</div>
+      <div class="label">Calories Today (kcal)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-target">—</div>
+      <div class="label">Daily Target (kcal)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-remaining">—</div>
+      <div class="label">Remaining (kcal)</div>
+    </div>
+  </div>
+
+  <div class="card" id="progress-card">
+    <h2 style="margin-bottom:14px;color:#1a5c36;">Daily Progress</h2>
+    <p id="progress-label" style="font-size:0.9rem;color:#555;margin-bottom:6px;"></p>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:16px;color:#1a5c36;">Meals for Selected Day</h2>
+    <div class="empty-state" id="empty-msg">No meals logged for this day yet.</div>
+    <table id="calorie-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Meal</th>
+          <th>Food / Drink</th>
+          <th>Calories (kcal)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="calorie-tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  const KEY = 'dgf_calories';
+
+  function getEntries() {
+    return Storage.get(KEY);
+  }
+
+  function saveEntries(list) {
+    Storage.set(KEY, list);
+  }
+
+  function getViewDate() {
+    return document.getElementById('view-date').value;
+  }
+
+  function getTarget() {
+    const entries = getEntries();
+    // Use the most recently saved target
+    const withTarget = entries.filter(e => e.target);
+    if (withTarget.length === 0) return null;
+    return parseFloat(withTarget[withTarget.length - 1].target);
+  }
+
+  function renderStats(entries) {
+    const viewDate = getViewDate();
+    const dayEntries = entries.filter(e => e.date === viewDate);
+    const total = dayEntries.reduce((sum, e) => sum + parseFloat(e.calories || 0), 0);
+
+    document.getElementById('stat-total').textContent = total;
+
+    const target = getTarget();
+    if (target) {
+      const remaining = target - total;
+      document.getElementById('stat-target').textContent = target;
+      document.getElementById('stat-remaining').textContent = remaining >= 0 ? remaining : 'Over by ' + Math.abs(remaining);
+
+      const pct = Math.min(100, (total / target) * 100);
+      document.getElementById('progress-bar').style.width = pct.toFixed(1) + '%';
+      const bar = document.getElementById('progress-bar');
+      bar.classList.toggle('progress-bar-over', pct > 100);
+      document.getElementById('progress-label').textContent =
+        `${total} / ${target} kcal consumed (${pct.toFixed(0)}%)`;
+      document.getElementById('progress-card').style.display = '';
+    } else {
+      document.getElementById('stat-target').textContent = '—';
+      document.getElementById('stat-remaining').textContent = '—';
+      document.getElementById('progress-card').style.display = 'none';
+    }
+  }
+
+  function renderTable(entries) {
+    const viewDate = getViewDate();
+    const dayEntries = entries.filter(e => e.date === viewDate);
+    const emptyMsg = document.getElementById('empty-msg');
+    const table    = document.getElementById('calorie-table');
+    const tbody    = document.getElementById('calorie-tbody');
+
+    if (dayEntries.length === 0) {
+      emptyMsg.style.display = '';
+      table.style.display = 'none';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+    table.style.display = '';
+
+    tbody.innerHTML = '';
+    dayEntries.forEach((e) => {
+      const globalIdx = entries.indexOf(e);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${e.meal}</td>
+        <td>${e.food}</td>
+        <td><strong>${parseFloat(e.calories).toFixed(0)}</strong></td>
+        <td><button class="btn btn-danger" data-idx="${globalIdx}">Delete</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-idx]').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const i = parseInt(this.dataset.idx, 10);
+        const list = getEntries();
+        list.splice(i, 1);
+        saveEntries(list);
+        render();
+      });
+    });
+  }
+
+  function render() {
+    const entries = getEntries();
+    renderStats(entries);
+    renderTable(entries);
+  }
+
+  // Pre-fill target from saved data
+  function prefillTarget() {
+    const target = getTarget();
+    if (target) document.getElementById('daily-target').value = target;
+  }
+
+  document.getElementById('entry-date').value = today();
+  document.getElementById('view-date').value  = today();
+  prefillTarget();
+
+  document.getElementById('view-date').addEventListener('change', render);
+
+  document.getElementById('calorie-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const date     = document.getElementById('entry-date').value;
+    const meal     = document.getElementById('meal-type').value;
+    const food     = document.getElementById('food-name').value.trim();
+    const calories = document.getElementById('calories').value;
+    const target   = document.getElementById('daily-target').value;
+
+    if (!date || !food || calories === '') {
+      alert('Please fill in date, food name, and calories.');
+      return;
+    }
+
+    const list = getEntries();
+    list.push({ date, meal, food, calories, target });
+    saveEntries(list);
+
+    // Switch view to logged date
+    document.getElementById('view-date').value = date;
+
+    showAlert(document.getElementById('form-card'), 'Meal logged successfully!');
+    document.getElementById('food-name').value = '';
+    document.getElementById('calories').value  = '';
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
