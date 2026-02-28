@@ -1,12 +1,13 @@
 'use strict';
 
-const express  = require('express');
-const Database = require('better-sqlite3');
-const jwt      = require('jsonwebtoken');
-const bcrypt   = require('bcryptjs');
-const path     = require('path');
-const crypto   = require('crypto');
-const fs       = require('fs');
+const express     = require('express');
+const rateLimit   = require('express-rate-limit');
+const Database    = require('better-sqlite3');
+const jwt         = require('jsonwebtoken');
+const bcrypt      = require('bcryptjs');
+const path        = require('path');
+const crypto      = require('crypto');
+const fs          = require('fs');
 
 // ── Configuration ──────────────────────────────────────────────────────────────
 const PORT       = parseInt(process.env.PORT || '3000', 10);
@@ -89,8 +90,30 @@ const stmts = {
 const app = express();
 app.use(express.json());
 
-// Serve static frontend files from the same directory
-app.use(express.static(__dirname));
+// ── Rate limiters ───────────────────────────────────────────────────────────────
+// Strict limiter for authentication endpoints (prevents brute-force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+
+// General limiter for all other API endpoints
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+
+app.use('/api/auth/', authLimiter);
+app.use('/api/', apiLimiter);
+
+// Serve static frontend files from the dedicated public directory
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'deny' }));
 
 // ── Auth middleware ─────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -169,7 +192,7 @@ app.post('/api/workouts', requireAuth, (req, res) => {
   if (!session || !session.date || !Array.isArray(session.exercises)) {
     return res.status(400).json({ error: 'Invalid workout data.' });
   }
-  const id = session.id || (Date.now() + '_' + Math.random().toString(36).slice(2));
+  const id = session.id || crypto.randomUUID();
   session.id = id;
   stmts.insertWorkout.run(id, req.user.userId, session.date, JSON.stringify(session));
   res.status(201).json({ ok: true, id });

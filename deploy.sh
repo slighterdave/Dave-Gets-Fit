@@ -121,7 +121,7 @@ server {
     }
 
     # Serve static frontend files
-    root /var/www/dave-gets-fit;
+    root /var/www/dave-gets-fit/public;
     index index.html;
 
     location / {
@@ -133,7 +133,7 @@ server {
         deny all;
     }
 
-    location ~* \.(js\.secret|db)$ {
+    location ~* \.(db)$ {
         deny all;
     }
 }
