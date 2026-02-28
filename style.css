@@ -163,6 +163,17 @@ h3 {
   transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
 }
 
+.btn-secondary {
+  background: #2a2a2a;
+  color: #cc1a1a;
+  border: 1px solid #5a0000;
+}
+
+.btn-secondary:hover {
+  background: #3a0000;
+  color: #ff6666;
+}
+
 .btn:active {
   transform: scale(0.97);
 }
@@ -468,4 +479,104 @@ tbody tr:hover {
   letter-spacing: 0.03em;
   min-height: 1.2em;
   margin-bottom: 14px;
+}
+
+/* Chart card header */
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Exercise row builder */
+.exercise-row {
+  margin-bottom: 10px;
+}
+
+.exercise-row-fields {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.exercise-row-fields .form-group {
+  flex: 1;
+  min-width: 90px;
+  margin-bottom: 0;
+}
+
+.btn-remove-exercise {
+  flex-shrink: 0;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+/* Workout session history blocks */
+.session-block {
+  border: 1px solid #2e2e2e;
+  border-radius: 3px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #111;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.session-header:hover {
+  background: #1a1a1a;
+}
+
+.session-date {
+  font-weight: 700;
+  color: #cc1a1a;
+  font-size: 0.95rem;
+  min-width: 80px;
+}
+
+.session-meta {
+  color: #777;
+  font-size: 0.85rem;
+  flex: 1;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.session-toggle {
+  color: #555;
+  font-size: 0.75rem;
+  margin-left: auto;
+}
+
+.session-body {
+  display: none;
+  padding: 0 16px 16px;
+  background: #0f0f0f;
+}
+
+.session-body.open {
+  display: block;
+}
+
+@media (max-width: 600px) {
+  .exercise-row-fields {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
