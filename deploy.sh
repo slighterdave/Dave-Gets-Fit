@@ -53,6 +53,7 @@ echo "==> Deploying application to ${APP_DIR}..."
 git config --system --add safe.directory "${APP_DIR}"
 if [[ -d "${APP_DIR}/.git" ]]; then
   echo "    Repository already cloned – pulling latest changes..."
+  chown -R ${APP_USER}:${APP_USER} "${APP_DIR}"
   sudo -u ${APP_USER} git -C "${APP_DIR}" fetch --all --prune
   sudo -u ${APP_USER} git -C "${APP_DIR}" reset --hard origin/main
 else
