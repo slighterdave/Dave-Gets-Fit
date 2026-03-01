@@ -55,6 +55,13 @@
     </div>
   </div>
 
+  <!-- ── Assigned Plans ───────────────────────────────── -->
+  <div class="card" id="plans-card" style="display:none;">
+    <h2 style="margin-bottom:16px;color:#cc1a1a;">📋 My Assigned Plans</h2>
+    <p style="color:#888;font-size:0.92rem;margin-bottom:14px;">Plans assigned by your trainer. Click <strong>Start Plan</strong> to pre-fill today's workout.</p>
+    <div id="assigned-plans-list"></div>
+  </div>
+
   <!-- ── Create Workout ────────────────────────────────── -->
   <div class="card" id="form-card">
     <h2 style="margin-bottom:20px;color:#cc1a1a;">Create Workout</h2>
@@ -93,11 +100,58 @@
   Auth.requireAuth();
 
   async function getSessions() { return API.get('/workouts').catch(() => []); }
+  async function getAssignedPlans() { return API.get('/plans').catch(() => []); }
 
   function startOfWeek() {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay());
     return d.toISOString().split('T')[0];
+  }
+
+  /* ── Assigned Plans ────────────────────────────────── */
+  function renderAssignedPlans(plans) {
+    const card = document.getElementById('plans-card');
+    const list = document.getElementById('assigned-plans-list');
+    if (!plans.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    list.innerHTML = plans.map(p => `
+      <div style="border:1px solid #2a2a2a;border-radius:6px;padding:12px 16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div>
+            <strong style="color:#ccc;">${p.name}</strong>
+            <span style="color:#666;font-size:0.85rem;margin-left:8px;">${p.exercises.length} exercise${p.exercises.length !== 1 ? 's' : ''}</span>
+          </div>
+          <button class="btn btn-primary" style="padding:5px 14px;font-size:0.85rem;" onclick="startPlan(${p.id})">▶ Start Plan</button>
+        </div>
+        <table style="margin-top:10px;width:100%;border-collapse:collapse;font-size:0.88rem;">
+          <thead><tr style="color:#666;">
+            <th style="text-align:left;padding:4px 8px;">Exercise</th>
+            <th style="text-align:left;padding:4px 8px;">Sets</th>
+            <th style="text-align:left;padding:4px 8px;">Reps</th>
+            <th style="text-align:left;padding:4px 8px;">Weight (kg)</th>
+          </tr></thead>
+          <tbody>${p.exercises.map(e => { const w = parseFloat(e.weightKg); return `<tr style="color:#aaa;">
+            <td style="padding:3px 8px;">${e.name}</td>
+            <td style="padding:3px 8px;">${e.sets || '—'}</td>
+            <td style="padding:3px 8px;">${e.reps || '—'}</td>
+            <td style="padding:3px 8px;">${w > 0 ? w.toFixed(1) : '—'}</td>
+          </tr>`; }).join('')}</tbody>
+        </table>
+      </div>`).join('');
+  }
+
+  let _assignedPlans = [];
+  function startPlan(planId) {
+    const plan = _assignedPlans.find(p => p.id === planId);
+    if (!plan) return;
+    // Pre-fill the workout form with the plan's exercises
+    document.getElementById('exercise-list').innerHTML = '';
+    rowCount = 0;
+    plan.exercises.forEach(e => addExerciseRow(e.name, e.sets || '', e.reps || '', e.weightKg || ''));
+    document.getElementById('workout-date').value = today();
+    document.getElementById('workout-notes').value = plan.name;
+    document.getElementById('form-card').scrollIntoView({ behavior: 'smooth' });
+    showAlert(document.getElementById('form-card'), `Plan "${plan.name}" loaded. Adjust weights and log your workout.`);
   }
 
   /* ── Exercise row builder ──────────────────────────── */
@@ -353,7 +407,9 @@
 
   /* ── Main render ───────────────────────────────────── */
   async function render() {
-    const sessions = await getSessions();
+    const [sessions, plans] = await Promise.all([getSessions(), getAssignedPlans()]);
+    _assignedPlans = plans;
+    renderAssignedPlans(plans);
     renderStats(sessions);
     drawChart(sessions);
     renderHistory(sessions);

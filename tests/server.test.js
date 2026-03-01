@@ -434,3 +434,117 @@ test('admin can delete a user', async () => {
   const { body: afterUsers } = await req('GET', '/api/admin/users', undefined, adminToken);
   assert.ok(!afterUsers.find(u => u.username === 'tmp_user'));
 });
+
+// ── Exercise plan routes ──────────────────────────────────────────────────
+let planId;
+
+test('setup: re-assign bob to carol for plan tests', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobUser = users.find(u => u.username === 'bob');
+  const { status } = await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: bobUser.id }, adminToken);
+  assert.equal(status, 201);
+});
+
+test('trainer can create an exercise plan', async () => {
+  const plan = {
+    name: 'Beginner Strength',
+    exercises: [
+      { name: 'Squat', sets: '3', reps: '10', weightKg: '60' },
+      { name: 'Bench Press', sets: '3', reps: '8', weightKg: '50' },
+    ],
+  };
+  const { status, body } = await req('POST', '/api/trainer/plans', plan, trainerToken);
+  assert.equal(status, 201);
+  assert.ok(body.id);
+  planId = body.id;
+});
+
+test('trainer can list their plans', async () => {
+  const { status, body } = await req('GET', '/api/trainer/plans', undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].name, 'Beginner Strength');
+  assert.equal(body[0].exercises.length, 2);
+});
+
+test('create plan returns 400 when name missing', async () => {
+  const { status, body } = await req('POST', '/api/trainer/plans', { exercises: [{ name: 'Squat' }] }, trainerToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('create plan returns 400 when exercises empty', async () => {
+  const { status, body } = await req('POST', '/api/trainer/plans', { name: 'Empty Plan', exercises: [] }, trainerToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('regular user cannot create plans', async () => {
+  const { body: bobAuth } = await req('POST', '/api/auth/login', { username: 'bob', password: 'password123' });
+  const { status } = await req('POST', '/api/trainer/plans', { name: 'Test', exercises: [{ name: 'Squat' }] }, bobAuth.token);
+  assert.equal(status, 403);
+});
+
+test('trainer can assign a plan to an assigned user', async () => {
+  const { body: users } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  const bobId = users[0].id;
+  const { status, body } = await req('POST', `/api/trainer/users/${bobId}/plans`, { planId }, trainerToken);
+  assert.equal(status, 201);
+  assert.equal(body.ok, true);
+});
+
+test('trainer can view plans assigned to a user', async () => {
+  const { body: users } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  const bobId = users[0].id;
+  const { status, body } = await req('GET', `/api/trainer/users/${bobId}/plans`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].name, 'Beginner Strength');
+});
+
+test('user can view their own assigned plans', async () => {
+  const { body: bobAuth } = await req('POST', '/api/auth/login', { username: 'bob', password: 'password123' });
+  const { status, body } = await req('GET', '/api/plans', undefined, bobAuth.token);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].name, 'Beginner Strength');
+  assert.ok(Array.isArray(body[0].exercises));
+});
+
+test('plans endpoint requires auth', async () => {
+  const { status } = await req('GET', '/api/plans');
+  assert.equal(status, 401);
+});
+
+test('trainer can unassign a plan from a user', async () => {
+  const { body: users } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  const bobId = users[0].id;
+  const { status, body } = await req('DELETE', `/api/trainer/users/${bobId}/plans/${planId}`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: plans } = await req('GET', `/api/trainer/users/${bobId}/plans`, undefined, trainerToken);
+  assert.equal(plans.length, 0);
+});
+
+test('trainer can delete a plan', async () => {
+  const { status, body } = await req('DELETE', `/api/trainer/plans/${planId}`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: plans } = await req('GET', '/api/trainer/plans', undefined, trainerToken);
+  assert.equal(plans.length, 0);
+});
+
+test('trainer cannot delete another trainer\'s plan', async () => {
+  // Create a plan as carol
+  const { body: created } = await req('POST', '/api/trainer/plans', { name: 'Carol Plan', exercises: [{ name: 'Run' }] }, trainerToken);
+  // Alice is admin (also passes requireTrainer) but did not create this plan
+  const { status } = await req('DELETE', `/api/trainer/plans/${created.id}`, undefined, adminToken);
+  assert.equal(status, 404);
+  // Clean up
+  await req('DELETE', `/api/trainer/plans/${created.id}`, undefined, trainerToken);
+});

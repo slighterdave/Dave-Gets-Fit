@@ -113,14 +113,43 @@
   <!-- Trainer view (non-admin trainers see this instead) -->
   <div class="card" id="trainer-panel">
     <h2 style="color:#cc1a1a;">👥 My Athletes</h2>
-    <table class="users-table" id="trainer-users-table">
-      <thead>
-        <tr><th>#</th><th>Username</th><th>Role</th></tr>
-      </thead>
-      <tbody id="trainer-users-tbody">
-        <tr><td colspan="3" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
-      </tbody>
-    </table>
+
+    <div class="tab-bar" id="trainer-tab-bar">
+      <button class="tab active" data-ttab="athletes">Athletes</button>
+      <button class="tab" data-ttab="plans">Exercise Plans</button>
+    </div>
+
+    <!-- Athletes tab -->
+    <div id="ttab-athletes">
+      <table class="users-table" id="trainer-users-table">
+        <thead>
+          <tr><th>#</th><th>Username</th><th>Role</th><th>Assigned Plans</th></tr>
+        </thead>
+        <tbody id="trainer-users-tbody">
+          <tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Plans tab -->
+    <div id="ttab-plans" style="display:none;">
+      <form id="plan-form" novalidate style="margin-bottom:20px;">
+        <div class="form-row">
+          <div class="form-group" style="flex:2;">
+            <label for="plan-name">Plan Name</label>
+            <input type="text" id="plan-name" placeholder="e.g. Beginner Strength" required />
+          </div>
+        </div>
+        <div id="plan-exercise-list"></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+          <button type="button" class="btn btn-secondary" id="plan-add-exercise-btn">+ Add Exercise</button>
+          <button type="submit" class="btn btn-primary">Save Plan</button>
+        </div>
+      </form>
+
+      <h3 style="color:#cc1a1a;margin-bottom:10px;">Saved Plans</h3>
+      <div id="plans-list"><p style="color:#888;">No plans saved yet.</p></div>
+    </div>
   </div>
 </main>
 
@@ -251,24 +280,173 @@
   }
 
   // ── Trainer view (non-admin trainer) ──────────────────────────────────────
+  // Tab switching for trainer panel
+  document.querySelectorAll('#trainer-tab-bar .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#trainer-tab-bar .tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#ttab-athletes,#ttab-plans').forEach(el => el.style.display = 'none');
+      document.getElementById('ttab-' + btn.dataset.ttab).style.display = '';
+    });
+  });
+
+  let trainerAthletes = [];
+  let savedPlans = [];
+
   async function loadTrainerView() {
-    const users = await API.get('/trainer/users');
+    trainerAthletes = await API.get('/trainer/users');
+    await renderTrainerAthletes();
+    await loadTrainerPlans();
+  }
+
+  async function renderTrainerAthletes() {
     const tbody = document.getElementById('trainer-users-tbody');
-    if (!users.length) {
-      tbody.innerHTML = '<tr><td colspan="3" style="color:#888;text-align:center;padding:20px;">No athletes assigned yet.</td></tr>';
+    if (!trainerAthletes.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">No athletes assigned yet.</td></tr>';
       return;
     }
-    tbody.innerHTML = users.map(u => `
-      <tr>
+    // For each athlete, fetch their assigned plans
+    const rows = await Promise.all(trainerAthletes.map(async u => {
+      const plans = await API.get(`/trainer/users/${u.id}/plans`).catch(() => []);
+      const planOptions = savedPlans.map(p =>
+        `<option value="${p.id}">${p.name}</option>`).join('');
+      const assignedPills = plans.map(p =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;background:#1a2a3a;border-radius:10px;padding:2px 8px;font-size:0.8rem;color:#8cf;">
+          ${p.name}
+          <button onclick="unassignPlan(${u.id},${p.id})" style="background:none;border:none;color:#888;cursor:pointer;font-size:0.85rem;line-height:1;padding:0 2px;" title="Remove">✕</button>
+        </span>`).join(' ');
+      return `<tr>
         <td style="color:#555;">${u.id}</td>
         <td>${u.username}</td>
         <td><span class="role-badge user">user</span></td>
-      </tr>`).join('');
+        <td>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            ${assignedPills || '<span style="color:#555;font-size:0.85rem;">None</span>'}
+            ${savedPlans.length ? `<select id="plan-select-${u.id}" style="min-width:130px;font-size:0.82rem;padding:3px 6px;">
+              <option value="">Assign plan…</option>${planOptions}
+            </select>
+            <button class="btn-xs promote" onclick="assignPlanToUser(${u.id})">Assign</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }));
+    tbody.innerHTML = rows.join('');
   }
+
+  async function loadTrainerPlans() {
+    savedPlans = await API.get('/trainer/plans').catch(() => []);
+    renderPlansList();
+    await renderTrainerAthletes();
+  }
+
+  function renderPlansList() {
+    const container = document.getElementById('plans-list');
+    if (!savedPlans.length) {
+      container.innerHTML = '<p style="color:#888;">No plans saved yet.</p>';
+      return;
+    }
+    container.innerHTML = savedPlans.map(p => `
+      <div class="assignment-item">
+        <div>
+          <strong style="color:#ccc;">${p.name}</strong>
+          <span style="color:#666;font-size:0.85rem;margin-left:8px;">${p.exercises.length} exercise${p.exercises.length !== 1 ? 's' : ''}: ${p.exercises.map(e => e.name).join(', ')}</span>
+        </div>
+        <button class="btn-xs delete" onclick="deletePlan(${p.id})" title="Delete plan">🗑</button>
+      </div>`).join('');
+  }
+
+  async function assignPlanToUser(userId) {
+    const sel = document.getElementById('plan-select-' + userId);
+    const planId = parseInt(sel && sel.value);
+    if (!planId) { alert('Please select a plan to assign.'); return; }
+    try {
+      await API.post(`/trainer/users/${userId}/plans`, { planId });
+      await renderTrainerAthletes();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function unassignPlan(userId, planId) {
+    try {
+      await API.del(`/trainer/users/${userId}/plans/${planId}`);
+      await renderTrainerAthletes();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function deletePlan(planId) {
+    const plan = savedPlans.find(p => p.id === planId);
+    const planName = plan ? plan.name : 'this plan';
+    if (!confirm(`Delete plan "${planName}"? This will also remove it from all athletes.`)) return;
+    try {
+      await API.del(`/trainer/plans/${planId}`);
+      await loadTrainerPlans();
+    } catch (e) { alert(e.message); }
+  }
+
+  // Plan builder
+  let planRowCount = 0;
+  function addPlanExerciseRow(name = '', sets = '', reps = '', weightKg = '') {
+    planRowCount++;
+    const container = document.getElementById('plan-exercise-list');
+    const div = document.createElement('div');
+    div.className = 'exercise-row';
+    div.innerHTML = `
+      <div class="exercise-row-fields">
+        <div class="form-group" style="flex:2;">
+          <label>Exercise</label>
+          <input type="text" class="ex-name" placeholder="e.g. Squat" value="${name}" required />
+        </div>
+        <div class="form-group">
+          <label>Sets</label>
+          <input type="number" class="ex-sets" placeholder="3" min="1" value="${sets}" />
+        </div>
+        <div class="form-group">
+          <label>Reps</label>
+          <input type="number" class="ex-reps" placeholder="10" min="1" value="${reps}" />
+        </div>
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" class="ex-weight" placeholder="60" min="0" step="0.5" value="${weightKg}" />
+        </div>
+        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove">✕</button>
+      </div>`;
+    div.querySelector('.btn-remove-exercise').addEventListener('click', () => {
+      div.remove();
+      if (!document.querySelectorAll('#plan-exercise-list .exercise-row').length) addPlanExerciseRow();
+    });
+    container.appendChild(div);
+  }
+
+  document.getElementById('plan-add-exercise-btn').addEventListener('click', () => addPlanExerciseRow());
+
+  document.getElementById('plan-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const name = document.getElementById('plan-name').value.trim();
+    if (!name) { alert('Please enter a plan name.'); return; }
+    const exercises = [];
+    document.querySelectorAll('#plan-exercise-list .exercise-row').forEach(row => {
+      const n = row.querySelector('.ex-name').value.trim();
+      if (n) exercises.push({
+        name: n,
+        sets:     row.querySelector('.ex-sets').value,
+        reps:     row.querySelector('.ex-reps').value,
+        weightKg: row.querySelector('.ex-weight').value,
+      });
+    });
+    if (!exercises.length) { alert('Please add at least one exercise.'); return; }
+    try {
+      await API.post('/trainer/plans', { name, exercises });
+      document.getElementById('plan-name').value = '';
+      document.getElementById('plan-exercise-list').innerHTML = '';
+      planRowCount = 0;
+      addPlanExerciseRow();
+      showAlert(document.getElementById('trainer-panel'), 'Plan saved!');
+      await loadTrainerPlans();
+    } catch (e) { alert(e.message); }
+  });
 
   // Boot
   if (role === 'admin') loadUsers();
-  if (role === 'trainer') loadTrainerView();
+  if (role === 'trainer') { addPlanExerciseRow(); loadTrainerView(); }
 </script>
 </body>
 </html>
