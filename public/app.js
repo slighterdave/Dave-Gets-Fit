@@ -17,11 +17,16 @@ const API = {
     const token = this.token();
     if (token) headers['Authorization'] = 'Bearer ' + token;
 
-    const res = await fetch(this.BASE + path, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let res;
+    try {
+      res = await fetch(this.BASE + path, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new Error('Cannot reach the server. Please make sure the backend is running.');
+    }
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Request failed');

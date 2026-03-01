@@ -85,6 +85,7 @@ try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 const stmts = {
   findUser:       db.prepare('SELECT * FROM users WHERE username = ?'),
   insertUser:     db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)'),
+  insertUserWithRole: db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)'),
   getProfile:     db.prepare('SELECT data FROM profiles WHERE user_id = ?'),
   upsertProfile:  db.prepare('INSERT INTO profiles (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data'),
   getWorkouts:    db.prepare('SELECT id, data FROM workouts WHERE user_id = ? ORDER BY date DESC'),
@@ -328,6 +329,26 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
 // ── Admin routes ──────────────────────────────────────────────────────────────
 app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   res.json(stmts.listUsers.all());
+});
+
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  const { username, password, role = 'user' } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
+  if (!/^[a-zA-Z0-9_]{2,30}$/.test(username)) {
+    return res.status(400).json({ error: 'Username must be 2–30 characters (letters, numbers, underscores).' });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if (!VALID_ROLES.includes(role)) {
+    return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
+  }
+  if (stmts.findUser.get(username)) {
+    return res.status(409).json({ error: 'Username already taken.' });
+  }
+  const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  const info = stmts.insertUserWithRole.run(username, hash, role);
+  res.status(201).json({ ok: true, id: info.lastInsertRowid });
 });
 
 app.put('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {

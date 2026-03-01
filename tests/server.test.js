@@ -434,3 +434,49 @@ test('admin can delete a user', async () => {
   const { body: afterUsers } = await req('GET', '/api/admin/users', undefined, adminToken);
   assert.ok(!afterUsers.find(u => u.username === 'tmp_user'));
 });
+
+// ── Admin create user ─────────────────────────────────────────────────────────
+test('admin can create a new user', async () => {
+  const { status, body } = await req('POST', '/api/admin/users', { username: 'newuser', password: 'password123', role: 'user' }, adminToken);
+  assert.equal(status, 201);
+  assert.ok(body.ok);
+  assert.ok(body.id);
+
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  assert.ok(users.find(u => u.username === 'newuser'));
+});
+
+test('admin can create a trainer via admin endpoint', async () => {
+  const { status, body } = await req('POST', '/api/admin/users', { username: 'newtrainer', password: 'password123', role: 'trainer' }, adminToken);
+  assert.equal(status, 201);
+  assert.ok(body.ok);
+
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const created = users.find(u => u.username === 'newtrainer');
+  assert.ok(created);
+  assert.equal(created.role, 'trainer');
+});
+
+test('admin create user rejects duplicate username', async () => {
+  const { status, body } = await req('POST', '/api/admin/users', { username: 'alice', password: 'password123' }, adminToken);
+  assert.equal(status, 409);
+  assert.ok(body.error);
+});
+
+test('admin create user rejects short password', async () => {
+  const { status, body } = await req('POST', '/api/admin/users', { username: 'brandnew_short', password: 'short' }, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('admin create user rejects invalid role', async () => {
+  const { status, body } = await req('POST', '/api/admin/users', { username: 'brandnew_role', password: 'password123', role: 'superuser' }, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('non-admin cannot create users via admin endpoint', async () => {
+  const { body: carolAuth } = await req('POST', '/api/auth/login', { username: 'carol', password: 'password123' });
+  const { status } = await req('POST', '/api/admin/users', { username: 'brandnew_nonadmin', password: 'password123' }, carolAuth.token);
+  assert.equal(status, 403);
+});
