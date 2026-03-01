@@ -141,11 +141,9 @@ server {
 }
 NGINX
 
-# Enable the site and remove the default if it exists
+# Enable the site and remove the default site (unconditional; rm -f is a no-op if absent)
 ln -sf "${NGINX_CONF}" "${NGINX_ENABLED}"
-if [[ -f /etc/nginx/sites-enabled/default ]]; then
-  rm -f /etc/nginx/sites-enabled/default
-fi
+rm -f /etc/nginx/sites-enabled/default
 
 echo "==> Testing Nginx configuration..."
 nginx -t
