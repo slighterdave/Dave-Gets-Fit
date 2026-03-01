@@ -71,7 +71,11 @@ const Auth = {
     const token = sessionStorage.getItem(this.TOKEN_KEY);
     if (!token) return null;
     try {
-      return JSON.parse(atob(token.split('.')[1]));
+      // JWT uses base64url encoding; atob() requires standard base64.
+      // Convert by replacing url-safe chars and restoring stripped padding.
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      return JSON.parse(atob(padded));
     } catch { return null; }
   },
 
@@ -122,6 +126,7 @@ const Auth = {
   requireAuth() {
     if (!this.currentUser()) {
       window.location.href = 'login.html';
+      return;
     }
     const el = document.getElementById('nav-username-display');
     if (el) el.textContent = this.currentUser();
