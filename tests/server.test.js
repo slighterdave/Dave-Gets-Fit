@@ -221,7 +221,18 @@ test('delete a calorie entry', async () => {
   assert.equal(body.length, 0);
 });
 
-// ── User data reset ───────────────────────────────────────────────────────────
+// ── Food search ───────────────────────────────────────────────────────────────
+test('food search requires auth', async () => {
+  const { status } = await req('GET', '/api/food/search?q=apple');
+  assert.equal(status, 401);
+});
+
+test('food search returns 400 when query is missing', async () => {
+  const { status, body } = await req('GET', '/api/food/search', undefined, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
 test('reset user data deletes all fitness records', async () => {
   // Add some data
   await req('PUT', '/api/profile', { firstName: 'Alice' }, aliceToken);

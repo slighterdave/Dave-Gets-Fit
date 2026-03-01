@@ -42,6 +42,18 @@
           </select>
         </div>
       </div>
+      <!-- Food search -->
+      <div class="form-row">
+        <div class="form-group" style="position:relative;">
+          <label for="food-search">Search Food Database</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="food-search" placeholder="e.g. apple, chicken breast…" autocomplete="off" style="flex:1;" aria-label="Food search query" aria-controls="food-search-results" />
+            <button type="button" id="food-search-btn" class="btn btn-primary" style="white-space:nowrap;">Search</button>
+          </div>
+          <ul id="food-search-results" role="listbox" aria-label="Food search results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;list-style:none;padding:0;margin:0;max-height:240px;overflow-y:auto;"></ul>
+          <span id="food-search-announce" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;"></span>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="food-name">Food / Drink</label>
@@ -338,6 +350,79 @@
     document.getElementById('macro-fat').value     = '';
     render();
   });
+
+  // ── Food search ───────────────────────────────────────────────────────────────
+  (function () {
+    const searchInput   = document.getElementById('food-search');
+    const searchBtn     = document.getElementById('food-search-btn');
+    const resultsList   = document.getElementById('food-search-results');
+    const foodNameInput = document.getElementById('food-name');
+    const calInput      = document.getElementById('calories');
+    const proteinInput  = document.getElementById('macro-protein');
+    const carbsInput    = document.getElementById('macro-carbs');
+    const fatInput      = document.getElementById('macro-fat');
+    const announceEl    = document.getElementById('food-search-announce');
+
+    function hideResults() {
+      resultsList.style.display = 'none';
+      resultsList.innerHTML = '';
+    }
+
+    function showResults(items) {
+      resultsList.innerHTML = '';
+      if (items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No results found.';
+        li.style.cssText = 'padding:10px 14px;color:#888;font-size:0.9rem;';
+        resultsList.appendChild(li);
+      } else {
+        items.forEach(item => {
+          const li = document.createElement('li');
+          const cal = item.calories !== null ? `${Math.round(item.calories)} kcal` : '? kcal';
+          li.innerHTML = `<span style="font-weight:600;color:#d4d4d4;">${item.name}</span>` +
+            `<span style="float:right;font-size:0.85rem;color:#888;">${cal} / 100g</span>`;
+          li.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid #2a2a2a;';
+          li.addEventListener('mouseenter', () => li.style.background = '#2a2a2a');
+          li.addEventListener('mouseleave', () => li.style.background = '');
+          li.addEventListener('click', () => {
+            foodNameInput.value   = item.name;
+            calInput.value        = item.calories !== null ? Math.round(item.calories) : '';
+            proteinInput.value    = item.protein  !== null ? item.protein.toFixed(1)  : '';
+            carbsInput.value      = item.carbs    !== null ? item.carbs.toFixed(1)    : '';
+            fatInput.value        = item.fat      !== null ? item.fat.toFixed(1)      : '';
+            announceEl.textContent = `${item.name} selected.`;
+            searchInput.value = '';
+            hideResults();
+            foodNameInput.focus();
+          });
+          resultsList.appendChild(li);
+        });
+      }
+      resultsList.style.display = '';
+    }
+
+    async function doSearch() {
+      const q = searchInput.value.trim();
+      if (!q) return;
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Searching…';
+      try {
+        const items = await API.get('/food/search?q=' + encodeURIComponent(q));
+        showResults(Array.isArray(items) ? items : []);
+      } catch (e) {
+        showResults([]);
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Search';
+      }
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+    document.addEventListener('click', e => {
+      if (!resultsList.contains(e.target) && e.target !== searchInput && e.target !== searchBtn) hideResults();
+    });
+  }());
 
   render();
 </script>

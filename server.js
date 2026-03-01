@@ -248,6 +248,38 @@ app.delete('/api/calories/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Food search proxy ────────────────────────────────────────────────────────────
+app.get('/api/food/search', requireAuth, async (req, res) => {
+  const query = (req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
+
+  try {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=true&page_size=10&fields=product_name,nutriments`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) throw new Error('Upstream API error');
+    const json = await response.json();
+
+    const results = (json.products || [])
+      .filter(p => p.product_name)
+      .map(p => ({
+        name:     p.product_name,
+        calories: p.nutriments?.['energy-kcal_100g'] ?? null,
+        protein:  p.nutriments?.proteins_100g ?? null,
+        carbs:    p.nutriments?.carbohydrates_100g ?? null,
+        fat:      p.nutriments?.fat_100g ?? null,
+      }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('Food search error:', err.message || err);
+    res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
+  }
+});
+
 // ── Start server ─────────────────────────────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, () => {
