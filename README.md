@@ -26,7 +26,8 @@ A personal fitness tracking web app for logging workouts, weight, and calories. 
 ## Architecture
 
 ```
-Browser  ──HTTP──▶  nginx (port 80)
+Browser  ──HTTPS──▶  nginx (port 443, TLS via Let's Encrypt)
+                       │  (port 80 redirects to 443)
                        │
                        ├── /api/*   ──proxy──▶  Node.js / Express (port 3000)
                        │                              │
@@ -70,7 +71,8 @@ Open `http://localhost:3000` in your browser. The SQLite database file (`data.db
 
 - Ubuntu 20.04, 22.04, or 24.04
 - A server/VM with at least 512 MB RAM
-- Inbound TCP port **80** (and optionally **443**) open in your firewall / EC2 Security Group
+- Inbound TCP port **80** and **443** open in your firewall / EC2 Security Group
+- The domain `getus.fit` pointed at the server's public IP (A record)
 - Outbound TCP port **443** to reach `github.com` and `deb.nodesource.com`
 - Root or `sudo` access
 
@@ -86,7 +88,7 @@ sudo bash deploy.sh
 ```
 
 What the script does:
-1. Installs `git`, `nginx`, `curl`, and **Node.js 20.x LTS** (via the NodeSource repository).
+1. Installs `git`, `nginx`, `curl`, `certbot`, `python3-certbot-nginx`, and **Node.js 20.x LTS** (via the NodeSource repository).
 2. Clones the repository to `/var/www/getus-fit` (or pulls the latest changes if already cloned).
 3. Runs `npm ci --omit=dev` to install production dependencies.
 4. Creates and enables a **systemd service** (`getus-fit`) that starts the Node.js backend on port 3000 and restarts it automatically on failure.
@@ -94,8 +96,15 @@ What the script does:
    - Proxies `/api/*` requests to the Node.js backend.
    - Serves the static frontend from `/var/www/getus-fit/public/`.
    - Denies access to hidden files and `.db` files.
+6. Runs **Certbot** to obtain a free Let's Encrypt TLS certificate for `getus.fit`, configures nginx for HTTPS on port 443, and sets up an HTTP → HTTPS redirect. Certificate renewal is handled automatically by the certbot systemd timer.
 
-After the script finishes it prints the public IP address where the site is live.
+After the script finishes it prints the URL where the site is live (`https://getus.fit`).
+
+To use a different domain or supply a notification email for certificate expiry alerts:
+
+```bash
+DOMAIN=other.example.com LE_EMAIL=you@example.com sudo bash deploy.sh
+```
 
 ---
 
