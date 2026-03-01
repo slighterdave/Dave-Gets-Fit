@@ -42,6 +42,28 @@
           </select>
         </div>
       </div>
+      <!-- Barcode scan / lookup -->
+      <div class="form-row">
+        <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <label for="barcode-input">Barcode <span style="font-weight:400;color:#888;font-size:0.85rem;">(scan or type)</span></label>
+            <input type="text" id="barcode-input" placeholder="e.g. 5000112637922" inputmode="numeric" autocomplete="off" />
+          </div>
+          <button type="button" id="barcode-lookup-btn" class="btn btn-primary" style="white-space:nowrap;">Lookup</button>
+          <button type="button" id="barcode-scan-btn" class="btn btn-primary" style="white-space:nowrap;">📷 Scan</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="position:relative;">
+          <label for="food-search">Search Food Database <span style="font-weight:400;color:#888;font-size:0.85rem;">(optional – or fill in the fields below directly)</span></label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="food-search" placeholder="e.g. apple, chicken breast…" autocomplete="off" style="flex:1;" aria-label="Food search query" aria-controls="food-search-results" />
+            <button type="button" id="food-search-btn" class="btn btn-primary" style="white-space:nowrap;">Search</button>
+          </div>
+          <ul id="food-search-results" role="listbox" aria-label="Food search results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;list-style:none;padding:0;margin:0;max-height:240px;overflow-y:auto;"></ul>
+          <span id="food-search-announce" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;"></span>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="food-name">Food / Drink</label>
@@ -149,7 +171,16 @@
       </thead>
       <tbody id="calorie-tbody"></tbody>
     </table>
+  </div>  <!-- Camera overlay for barcode scanning -->
+  <div id="barcode-overlay" role="dialog" aria-modal="true" aria-label="Barcode scanner" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;">
+    <p id="barcode-status" style="color:#d4d4d4;font-size:0.95rem;margin:0;text-align:center;">Point camera at a barcode…</p>
+    <div style="position:relative;width:min(90vw,400px);">
+      <video id="barcode-video" autoplay playsinline muted style="width:100%;border-radius:8px;background:#000;display:block;"></video>
+      <div style="position:absolute;inset:0;border:2px solid #cc1a1a;border-radius:8px;pointer-events:none;"></div>
+    </div>
+    <button type="button" id="barcode-cancel-btn" class="btn btn-danger">Cancel</button>
   </div>
+
 </main>
 
 <script src="app.js"></script>
@@ -338,6 +369,193 @@
     document.getElementById('macro-fat').value     = '';
     render();
   });
+
+  // ── Food search ───────────────────────────────────────────────────────────────
+  (function () {
+    const searchInput   = document.getElementById('food-search');
+    const searchBtn     = document.getElementById('food-search-btn');
+    const resultsList   = document.getElementById('food-search-results');
+    const foodNameInput = document.getElementById('food-name');
+    const calInput      = document.getElementById('calories');
+    const proteinInput  = document.getElementById('macro-protein');
+    const carbsInput    = document.getElementById('macro-carbs');
+    const fatInput      = document.getElementById('macro-fat');
+    const announceEl    = document.getElementById('food-search-announce');
+
+    function hideResults() {
+      resultsList.style.display = 'none';
+      resultsList.innerHTML = '';
+    }
+
+    function showResults(items) {
+      resultsList.innerHTML = '';
+      if (items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No results found.';
+        li.style.cssText = 'padding:10px 14px;color:#888;font-size:0.9rem;';
+        resultsList.appendChild(li);
+      } else {
+        items.forEach(item => {
+          const li = document.createElement('li');
+          const cal = item.calories !== null ? `${Math.round(item.calories)} kcal` : '? kcal';
+          li.innerHTML = `<span style="font-weight:600;color:#d4d4d4;">${item.name}</span>` +
+            `<span style="float:right;font-size:0.85rem;color:#888;">${cal} / 100g</span>`;
+          li.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid #2a2a2a;';
+          li.addEventListener('mouseenter', () => li.style.background = '#2a2a2a');
+          li.addEventListener('mouseleave', () => li.style.background = '');
+          li.addEventListener('click', () => {
+            foodNameInput.value   = item.name;
+            calInput.value        = item.calories !== null ? Math.round(item.calories) : '';
+            proteinInput.value    = item.protein  !== null ? item.protein.toFixed(1)  : '';
+            carbsInput.value      = item.carbs    !== null ? item.carbs.toFixed(1)    : '';
+            fatInput.value        = item.fat      !== null ? item.fat.toFixed(1)      : '';
+            announceEl.textContent = `${item.name} selected.`;
+            searchInput.value = '';
+            hideResults();
+            foodNameInput.focus();
+          });
+          resultsList.appendChild(li);
+        });
+      }
+      resultsList.style.display = '';
+    }
+
+    async function doSearch() {
+      const q = searchInput.value.trim();
+      if (!q) return;
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Searching…';
+      try {
+        const items = await API.get('/food/search?q=' + encodeURIComponent(q));
+        showResults(Array.isArray(items) ? items : []);
+      } catch (e) {
+        showResults([]);
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Search';
+      }
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+    document.addEventListener('click', e => {
+      if (!resultsList.contains(e.target) && e.target !== searchInput && e.target !== searchBtn) hideResults();
+    });
+  }());
+
+  // ── Barcode scanner ────────────────────────────────────────────────────────────
+  (function () {
+    const scanBtn      = document.getElementById('barcode-scan-btn');
+    const lookupBtn    = document.getElementById('barcode-lookup-btn');
+    const barcodeInput = document.getElementById('barcode-input');
+    const overlay      = document.getElementById('barcode-overlay');
+    const video        = document.getElementById('barcode-video');
+    const cancelBtn    = document.getElementById('barcode-cancel-btn');
+    const statusEl     = document.getElementById('barcode-status');
+    const foodNameInput = document.getElementById('food-name');
+    const calInput      = document.getElementById('calories');
+    const proteinInput  = document.getElementById('macro-protein');
+    const carbsInput    = document.getElementById('macro-carbs');
+    const fatInput      = document.getElementById('macro-fat');
+    const announceEl    = document.getElementById('food-search-announce');
+
+    let stream   = null;
+    let scanning = false;
+    let frameId  = null;
+
+    function stopCamera() {
+      scanning = false;
+      if (frameId) { cancelAnimationFrame(frameId); frameId = null; }
+      if (stream)  { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      video.srcObject = null;
+      overlay.style.display = 'none';
+    }
+
+    function applyProduct(item) {
+      foodNameInput.value  = item.name || '';
+      calInput.value       = item.calories !== null ? Math.round(item.calories) : '';
+      proteinInput.value   = item.protein  !== null ? item.protein.toFixed(1)   : '';
+      carbsInput.value     = item.carbs    !== null ? item.carbs.toFixed(1)     : '';
+      fatInput.value       = item.fat      !== null ? item.fat.toFixed(1)       : '';
+      announceEl.textContent = `${item.name} found.`;
+    }
+
+    async function lookupCode(code) {
+      const item = await API.get('/food/barcode/' + encodeURIComponent(code));
+      applyProduct(item);
+      showAlert(document.getElementById('form-card'), 'Product found: ' + item.name);
+      foodNameInput.focus();
+    }
+
+    async function startScan() {
+      if (!('BarcodeDetector' in window)) {
+        alert('Camera barcode scanning is not supported in this browser. Please type the barcode number in the Barcode field and tap Lookup.');
+        return;
+      }
+
+      const detector = new BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'codabar'],
+      });
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+      } catch {
+        alert('Camera access denied. Please allow camera access and try again.');
+        return;
+      }
+
+      video.srcObject = stream;
+      await video.play();
+      overlay.style.display = 'flex';
+      statusEl.textContent = 'Point camera at a barcode…';
+      scanning = true;
+
+      async function detect() {
+        if (!scanning) return;
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            scanning = false;
+            const code = barcodes[0].rawValue;
+            barcodeInput.value = code;
+            statusEl.textContent = 'Barcode detected! Looking up product…';
+            try {
+              await lookupCode(code);
+              stopCamera();
+            } catch {
+              statusEl.textContent = 'Product not found. Try another barcode.';
+              setTimeout(() => { statusEl.textContent = 'Point camera at a barcode…'; scanning = true; detect(); }, 2500);
+            }
+            return;
+          }
+        } catch { /* ignore individual frame errors */ }
+        frameId = requestAnimationFrame(detect);
+      }
+      detect();
+    }
+
+    async function lookupManual() {
+      const code = barcodeInput.value.trim();
+      if (!code) { alert('Please enter a barcode number.'); return; }
+      lookupBtn.disabled = true;
+      lookupBtn.textContent = 'Looking up…';
+      try {
+        await lookupCode(code);
+      } catch (err) {
+        showAlert(document.getElementById('form-card'), err.message || 'Product not found.', 'error');
+      } finally {
+        lookupBtn.disabled = false;
+        lookupBtn.textContent = 'Lookup';
+      }
+    }
+
+    scanBtn.addEventListener('click', startScan);
+    cancelBtn.addEventListener('click', stopCamera);
+    lookupBtn.addEventListener('click', lookupManual);
+    barcodeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookupManual(); } });
+  }());
 
   render();
 </script>

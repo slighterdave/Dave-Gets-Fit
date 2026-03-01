@@ -23,6 +23,7 @@ function loadOrCreateSecret() {
 }
 const JWT_SECRET = loadOrCreateSecret();
 const BCRYPT_ROUNDS = 10;
+const VALID_ROLES   = ['admin', 'user', 'trainer'];
 
 // ── Database setup ─────────────────────────────────────────────────────────────
 const db = new Database(DB_PATH);
@@ -34,7 +35,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT    UNIQUE NOT NULL COLLATE NOCASE,
-    password_hash TEXT    NOT NULL
+    password_hash TEXT    NOT NULL,
+    role          TEXT    NOT NULL DEFAULT 'user'
   );
 
   CREATE TABLE IF NOT EXISTS profiles (
@@ -66,7 +68,18 @@ db.exec(`
     data     TEXT    NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS trainer_assignments (
+    trainer_id INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    PRIMARY KEY (trainer_id, user_id),
+    FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
+
+// Migration: add role column to databases created before this feature
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
 
 // ── Prepared statements ─────────────────────────────────────────────────────────
 const stmts = {
@@ -83,7 +96,15 @@ const stmts = {
   getCalories:    db.prepare('SELECT id, data FROM calories WHERE user_id = ? ORDER BY date, id'),
   insertCalorie:  db.prepare('INSERT INTO calories (user_id, date, data) VALUES (?, ?, ?)'),
   deleteCalorie:  db.prepare('DELETE FROM calories WHERE id = ? AND user_id = ?'),
-  deleteUserData: db.prepare('DELETE FROM profiles WHERE user_id = ?'),
+  deleteUserData:   db.prepare('DELETE FROM profiles WHERE user_id = ?'),
+  listUsers:        db.prepare('SELECT id, username, role FROM users ORDER BY username COLLATE NOCASE'),
+  getUserById:      db.prepare('SELECT id, username, role FROM users WHERE id = ?'),
+  updateUserRole:   db.prepare('UPDATE users SET role = ? WHERE id = ?'),
+  deleteUser:       db.prepare('DELETE FROM users WHERE id = ?'),
+  assignTrainer:    db.prepare('INSERT OR IGNORE INTO trainer_assignments (trainer_id, user_id) VALUES (?, ?)'),
+  removeAssignment: db.prepare('DELETE FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
+  getAssignedUsers: db.prepare('SELECT u.id, u.username, u.role FROM users u JOIN trainer_assignments ta ON ta.user_id = u.id WHERE ta.trainer_id = ? ORDER BY u.username COLLATE NOCASE'),
+  isAssigned:       db.prepare('SELECT 1 FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -128,6 +149,30 @@ function requireAuth(req, res, next) {
   }
 }
 
+// ── Role middleware ───────────────────────────────────────────────────────────
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required.' });
+  next();
+}
+
+function requireTrainer(req, res, next) {
+  if (req.user.role !== 'trainer' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Trainer access required.' });
+  }
+  next();
+}
+
+function trainerCanAccessUser(req, res, next) {
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(targetId)) return res.status(400).json({ error: 'Invalid user id.' });
+  req.targetUserId = targetId;
+  if (req.user.role === 'admin') return next();
+  if (!stmts.isAssigned.get(req.user.userId, targetId)) {
+    return res.status(403).json({ error: 'User not assigned to you.' });
+  }
+  next();
+}
+
 // ── Auth routes ─────────────────────────────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body || {};
@@ -143,7 +188,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
   const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const info = stmts.insertUser.run(username, hash);
-  const token = jwt.sign({ userId: info.lastInsertRowid, username }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ userId: info.lastInsertRowid, username, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
   res.status(201).json({ token });
 });
 
@@ -154,7 +199,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'User not found.' });
   const match = await bcrypt.compare(password, user.password_hash);
   if (!match) return res.status(401).json({ error: 'Incorrect password.' });
-  const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ userId: user.id, username: user.username, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token });
 });
 
@@ -248,6 +293,161 @@ app.delete('/api/calories/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Food search proxy ────────────────────────────────────────────────────────────
+app.get('/api/food/search', requireAuth, async (req, res) => {
+  const query = (req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
+
+  try {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=true&page_size=10&fields=product_name,nutriments`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) throw new Error('Upstream API error');
+    const json = await response.json();
+
+    const results = (json.products || [])
+      .filter(p => p.product_name)
+      .map(p => ({
+        name:     p.product_name,
+        calories: p.nutriments?.['energy-kcal_100g'] ?? null,
+        protein:  p.nutriments?.proteins_100g ?? null,
+        carbs:    p.nutriments?.carbohydrates_100g ?? null,
+        fat:      p.nutriments?.fat_100g ?? null,
+      }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('Food search error:', err.message || err);
+    res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
+  }
+});
+
+// ── Admin routes ──────────────────────────────────────────────────────────────
+app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+  res.json(stmts.listUsers.all());
+});
+
+app.put('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid user id.' });
+
+  const { role, password } = req.body || {};
+
+  if (role !== undefined) {
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
+    }
+    const info = stmts.updateUserRole.run(role, id);
+    if (info.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  }
+
+  if (password !== undefined) {
+    if (typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+  }
+
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (id === req.user.userId) return res.status(400).json({ error: 'Cannot delete your own account.' });
+  const info = stmts.deleteUser.run(id);
+  if (info.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/assignments', requireAuth, requireAdmin, (req, res) => {
+  const { trainerId, userId } = req.body || {};
+  if (!trainerId || !userId) return res.status(400).json({ error: 'trainerId and userId are required.' });
+  const trainer = stmts.getUserById.get(trainerId);
+  if (!trainer || trainer.role !== 'trainer') {
+    return res.status(400).json({ error: 'Specified user is not a trainer.' });
+  }
+  if (!stmts.getUserById.get(userId)) return res.status(404).json({ error: 'User not found.' });
+  stmts.assignTrainer.run(trainerId, userId);
+  res.status(201).json({ ok: true });
+});
+
+app.delete('/api/admin/assignments/:trainerId/:userId', requireAuth, requireAdmin, (req, res) => {
+  const trainerId = parseInt(req.params.trainerId, 10);
+  const userId    = parseInt(req.params.userId, 10);
+  if (!Number.isFinite(trainerId) || !Number.isFinite(userId)) {
+    return res.status(400).json({ error: 'Invalid id.' });
+  }
+  const info = stmts.removeAssignment.run(trainerId, userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Assignment not found.' });
+  res.json({ ok: true });
+});
+
+// ── Trainer routes ────────────────────────────────────────────────────────────
+app.get('/api/trainer/users', requireAuth, requireTrainer, (req, res) => {
+  if (req.user.role === 'admin') return res.json(stmts.listUsers.all());
+  res.json(stmts.getAssignedUsers.all(req.user.userId));
+});
+
+app.get('/api/trainer/users/:id/profile', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const row = stmts.getProfile.get(req.targetUserId);
+  res.json(row ? JSON.parse(row.data) : null);
+});
+
+app.get('/api/trainer/users/:id/workouts', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const rows = stmts.getWorkouts.all(req.targetUserId);
+  res.json(rows.map(r => JSON.parse(r.data)));
+});
+
+app.get('/api/trainer/users/:id/weights', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const rows = stmts.getWeights.all(req.targetUserId);
+  res.json(rows.map(r => JSON.parse(r.data)));
+});
+
+app.get('/api/trainer/users/:id/calories', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const rows = stmts.getCalories.all(req.targetUserId);
+  res.json(rows.map(r => ({ ...JSON.parse(r.data), id: r.id })));
+});
+
+// ── Barcode lookup ────────────────────────────────────────────────────────────
+app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
+  const barcode = req.params.barcode.trim();
+  if (!/^\d{6,14}$/.test(barcode)) {
+    return res.status(400).json({ error: 'Invalid barcode format.' });
+  }
+
+  try {
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) throw new Error('Upstream API error');
+    const json = await response.json();
+
+    if (json.status !== 1 || !json.product) {
+      return res.status(404).json({ error: 'Product not found for this barcode.' });
+    }
+
+    const p = json.product;
+    res.json({
+      name:     p.product_name || 'Unknown product',
+      calories: p.nutriments?.['energy-kcal_100g'] ?? null,
+      protein:  p.nutriments?.proteins_100g ?? null,
+      carbs:    p.nutriments?.carbohydrates_100g ?? null,
+      fat:      p.nutriments?.fat_100g ?? null,
+    });
+  } catch (err) {
+    console.error('Barcode lookup error:', err.message || err);
+    res.status(502).json({ error: 'Barcode lookup unavailable. Please enter details manually.' });
+  }
+});
+
 // ── Start server ─────────────────────────────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, () => {
@@ -256,3 +456,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.db = db;

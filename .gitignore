@@ -3,3 +3,4 @@ data.db
 .env
 *.log
 .jwt_secret
+data.db*
