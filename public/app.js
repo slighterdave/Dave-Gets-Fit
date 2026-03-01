@@ -82,6 +82,12 @@ const Auth = {
     return p.username || null;
   },
 
+  /** Returns the current user's role ('admin', 'trainer', 'user'), or null */
+  role() {
+    const p = this._payload();
+    return p ? (p.role || 'user') : null;
+  },
+
   async register(username, password) {
     try {
       const { token } = await API.post('/auth/register', { username, password });
@@ -114,5 +120,24 @@ const Auth = {
     }
     const el = document.getElementById('nav-username-display');
     if (el) el.textContent = this.currentUser();
+
+    // Inject Admin link for admin/trainer roles
+    const role = this.role();
+    if (role === 'admin' || role === 'trainer') {
+      const existing = document.getElementById('nav-admin-link');
+      if (!existing) {
+        const nav = document.querySelector('nav');
+        if (nav) {
+          const link = document.createElement('a');
+          link.id   = 'nav-admin-link';
+          link.href = 'admin.html';
+          link.textContent = role === 'admin' ? '⚙ Admin' : '👥 My Athletes';
+          if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
+          // Insert before the nav-user div
+          const navUser = nav.querySelector('.nav-user');
+          nav.insertBefore(link, navUser || null);
+        }
+      }
+    }
   },
 };
