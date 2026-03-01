@@ -10,14 +10,17 @@
 
 <nav>
   <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
-  <a href="index.html">Home</a>
-  <a href="progression.html">Progression</a>
-  <a href="weight.html" class="active">Weight</a>
-  <a href="calories.html">Calories</a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html" class="active">Weight</a>
+    <a href="calories.html">Calories</a>
+  </div>
   <div class="nav-user">
-    <span class="nav-username" id="nav-username-display"></span>
+    <a class="nav-username" id="nav-username-display" href="profile.html"></a>
     <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
   </div>
+  <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
 </nav>
 
 <main>

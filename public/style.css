@@ -22,6 +22,7 @@ nav {
   align-items: center;
   gap: 8px;
   box-shadow: 0 4px 16px rgba(139,0,0,0.4);
+  flex-wrap: wrap;
 }
 
 nav .brand {
@@ -34,6 +35,7 @@ nav .brand {
   margin-right: auto;
   text-decoration: none;
   text-shadow: 0 0 12px rgba(204,26,26,0.6);
+  flex-shrink: 0;
 }
 
 nav .brand-logo {
@@ -56,6 +58,32 @@ nav a:hover,
 nav a.active {
   color: #cc1a1a;
   background: rgba(139,0,0,0.2);
+}
+
+/* Collapsible nav links wrapper */
+.nav-links {
+  display: flex;
+  align-items: center;
+}
+
+/* Burger button (hidden on desktop) */
+.nav-burger {
+  display: none;
+  background: transparent;
+  border: 1px solid #3a3a3a;
+  color: #999;
+  font-size: 1.2rem;
+  padding: 6px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1;
+  margin-left: 8px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.nav-burger:hover {
+  color: #cc1a1a;
+  border-color: #8b0000;
 }
 
 /* Main layout */
@@ -353,6 +381,9 @@ tbody tr:hover {
   text-align: center;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   transition: border-top-color 0.2s, box-shadow 0.2s;
+  text-decoration: none;
+  display: block;
+  cursor: pointer;
 }
 
 .feature-card:hover {
@@ -390,6 +421,41 @@ tbody tr:hover {
 }
 
 /* Responsive */
+@media (max-width: 768px) {
+  .nav-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    order: 10;
+    padding: 4px 0 8px;
+    border-top: 1px solid #1e1e1e;
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
+  .nav-links a {
+    padding: 12px 16px;
+    border-radius: 0;
+    width: 100%;
+  }
+
+  nav {
+    padding: 0 16px;
+  }
+
+  nav .brand {
+    padding: 12px 0;
+  }
+}
+
 @media (max-width: 600px) {
   .stats-row,
   .features,
@@ -397,14 +463,38 @@ tbody tr:hover {
     flex-direction: column;
   }
 
-  nav {
-    flex-wrap: wrap;
-    padding: 8px 12px;
+  main {
+    padding: 0 14px;
+    margin: 24px auto;
   }
 
-  nav .brand {
-    width: 100%;
-    padding: 8px 0 4px;
+  .card {
+    padding: 20px 16px;
+  }
+
+  .hero {
+    padding: 32px 12px 24px;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .feature-card {
+    padding: 18px 16px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  table {
+    font-size: 0.82rem;
+  }
+
+  thead th,
+  tbody td {
+    padding: 8px 8px;
   }
 }
 
@@ -446,7 +536,6 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-left: 8px;
   padding-left: 14px;
   border-left: 1px solid #3a3a3a;
 }
@@ -456,6 +545,15 @@ tbody tr:hover {
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: 2px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-username:hover {
+  color: #cc1a1a;
+  background: rgba(139,0,0,0.15);
 }
 
 .btn-nav-logout {

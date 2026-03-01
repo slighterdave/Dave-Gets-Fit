@@ -131,6 +131,16 @@ const Auth = {
     const el = document.getElementById('nav-username-display');
     if (el) el.textContent = this.currentUser();
 
+    // Burger menu toggle
+    const burger = document.getElementById('nav-burger');
+    const navLinks = document.getElementById('nav-links');
+    if (burger && navLinks) {
+      burger.addEventListener('click', () => {
+        const isOpen = navLinks.classList.toggle('open');
+        burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
+
     // Inject Admin link for admin/trainer roles
     const role = this.role();
     if (role === 'admin' || role === 'trainer') {
