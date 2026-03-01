@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GetUs.Fit – My Profile</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html">Weight</a>
+    <a href="calories.html">Calories</a>
+  </div>
+  <div class="nav-user">
+    <a class="nav-username active" id="nav-username-display" href="profile.html"></a>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+  <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+</nav>
+
+<main>
+  <h1>My Profile</h1>
+  <p class="subtitle">Update your personal details and fitness goal.</p>
+
+  <div class="card" id="profile-card">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">Profile Details</h2>
+    <form id="profile-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first-name">First Name</label>
+          <input type="text" id="first-name" placeholder="Dave" required />
+        </div>
+        <div class="form-group">
+          <label for="last-name">Last Name</label>
+          <input type="text" id="last-name" placeholder="Smith" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="dave@example.com" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="age">Age</label>
+          <input type="number" id="age" placeholder="30" min="1" max="120" />
+        </div>
+        <div class="form-group">
+          <label for="goal">Fitness Goal</label>
+          <select id="goal">
+            <option value="">Select a goal…</option>
+            <option value="lose-weight">Lose weight</option>
+            <option value="gain-muscle">Gain muscle</option>
+            <option value="improve-fitness">Improve fitness</option>
+            <option value="maintain">Maintain current fitness</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save Profile</button>
+    </form>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  async function loadProfile() {
+    const profile = await API.get('/profile').catch(() => null);
+    if (!profile) return;
+    if (profile.firstName) document.getElementById('first-name').value = profile.firstName;
+    if (profile.lastName)  document.getElementById('last-name').value  = profile.lastName;
+    if (profile.email)     document.getElementById('email').value      = profile.email;
+    if (profile.age)       document.getElementById('age').value        = profile.age;
+    if (profile.goal)      document.getElementById('goal').value       = profile.goal;
+  }
+
+  document.getElementById('profile-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const firstName = document.getElementById('first-name').value.trim();
+    const lastName  = document.getElementById('last-name').value.trim();
+    const email     = document.getElementById('email').value.trim();
+    const age       = document.getElementById('age').value;
+    const goal      = document.getElementById('goal').value;
+
+    if (!firstName || !email) {
+      alert('Please fill in at least your first name and email.');
+      return;
+    }
+
+    await API.put('/profile', { firstName, lastName, email, age, goal });
+    showAlert(document.getElementById('profile-card'), 'Profile saved successfully!');
+  });
+
+  loadProfile();
+</script>
+</body>
+</html>

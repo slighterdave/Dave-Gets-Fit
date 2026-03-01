@@ -10,81 +10,48 @@
 
 <nav>
   <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
-  <a href="index.html" class="active">Home</a>
-  <a href="progression.html">Progression</a>
-  <a href="weight.html">Weight</a>
-  <a href="calories.html">Calories</a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html" class="active">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html">Weight</a>
+    <a href="calories.html">Calories</a>
+  </div>
   <div class="nav-user">
-    <span class="nav-username" id="nav-username-display"></span>
+    <a class="nav-username" id="nav-username-display" href="profile.html"></a>
     <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
   </div>
+  <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
 </nav>
 
 <main>
   <div class="hero">
     <h1>Welcome to GetUs.Fit</h1>
-    <p>Your personal fitness tracker. Sign up below to get started on your journey.</p>
+    <p>Your personal fitness tracker. Choose a section below to get started.</p>
   </div>
 
   <div class="features">
-    <div class="feature-card">
+    <a class="feature-card" href="progression.html">
       <div class="icon">📈</div>
       <h3>Progression</h3>
       <p>Log your workouts and track personal bests over time.</p>
-    </div>
-    <div class="feature-card">
+    </a>
+    <a class="feature-card" href="weight.html">
       <div class="icon">⚖️</div>
       <h3>Weight</h3>
       <p>Record your weight and visualise your progress toward your goal.</p>
-    </div>
-    <div class="feature-card">
+    </a>
+    <a class="feature-card" href="calories.html">
       <div class="icon">🍎</div>
       <h3>Calories</h3>
       <p>Keep a daily food diary and stay on top of your calorie intake.</p>
-    </div>
+    </a>
   </div>
 
-  <div class="card" id="signup-section">
-    <h2 style="margin-bottom:20px;color:#cc1a1a;">Set Up Your Profile</h2>
-    <form id="signup-form" novalidate>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="first-name">First Name</label>
-          <input type="text" id="first-name" placeholder="Dave" required />
-        </div>
-        <div class="form-group">
-          <label for="last-name">Last Name</label>
-          <input type="text" id="last-name" placeholder="Smith" required />
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="email">Email Address</label>
-        <input type="email" id="email" placeholder="dave@example.com" required />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="age">Age</label>
-          <input type="number" id="age" placeholder="30" min="1" max="120" />
-        </div>
-        <div class="form-group">
-          <label for="goal">Fitness Goal</label>
-          <select id="goal">
-            <option value="">Select a goal…</option>
-            <option value="lose-weight">Lose weight</option>
-            <option value="gain-muscle">Gain muscle</option>
-            <option value="improve-fitness">Improve fitness</option>
-            <option value="maintain">Maintain current fitness</option>
-          </select>
-        </div>
-      </div>
-      <button type="submit" class="btn btn-primary">Save Profile</button>
-    </form>
-  </div>
-
-  <div class="card" id="welcome-section" style="display:none;">
-    <h2 style="color:#cc1a1a;">Welcome back, <span id="welcome-name"></span>! 👋</h2>
-    <p style="margin-top:10px;color:#888;">Your account is set up and ready to go. Use the navigation above to start tracking.</p>
-    <button class="btn btn-danger" id="reset-btn" style="margin-top:16px;">Reset Account</button>
+  <div class="card" id="welcome-section">
+    <h2 id="welcome-heading" style="color:#cc1a1a;">Welcome! 👋</h2>
+    <p id="welcome-body" style="margin-top:10px;color:#888;">Use the sections above to start tracking your fitness.</p>
+    <a class="btn btn-primary" href="profile.html" id="profile-btn" style="display:inline-block;margin-top:16px;">Set Up Profile</a>
+    <button class="btn btn-danger" id="reset-btn" style="margin-top:16px;display:none;">Reset Account</button>
   </div>
 </main>
 
@@ -94,33 +61,18 @@
 
   async function loadPage() {
     const profile = await API.get('/profile').catch(() => null);
+    const heading = document.getElementById('welcome-heading');
+    const body    = document.getElementById('welcome-body');
+    const btn     = document.getElementById('profile-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
     if (profile && profile.firstName) {
-      document.getElementById('signup-section').style.display = 'none';
-      document.getElementById('welcome-section').style.display = '';
-      document.getElementById('welcome-name').textContent = profile.firstName;
+      heading.textContent = 'Welcome back, ' + profile.firstName + '! 👋';
+      body.textContent    = 'Your account is set up and ready to go. Use the navigation above to start tracking.';
+      btn.textContent     = 'Edit Profile';
+      resetBtn.style.display = '';
     }
   }
-
-  document.getElementById('signup-form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const firstName = document.getElementById('first-name').value.trim();
-    const lastName  = document.getElementById('last-name').value.trim();
-    const email     = document.getElementById('email').value.trim();
-    const age       = document.getElementById('age').value;
-    const goal      = document.getElementById('goal').value;
-
-    if (!firstName || !email) {
-      alert('Please fill in at least your first name and email.');
-      return;
-    }
-
-    const profile = { firstName, lastName, email, age, goal };
-    await API.put('/profile', profile);
-
-    document.getElementById('signup-section').style.display = 'none';
-    document.getElementById('welcome-section').style.display = '';
-    document.getElementById('welcome-name').textContent = firstName;
-  });
 
   document.getElementById('reset-btn').addEventListener('click', async function () {
     if (confirm('Reset all your fitness data? Your login account will remain active.')) {
