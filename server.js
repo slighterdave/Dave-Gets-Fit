@@ -280,6 +280,41 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
   }
 });
 
+// ── Barcode lookup ────────────────────────────────────────────────────────────
+app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
+  const barcode = req.params.barcode.trim();
+  if (!/^\d{6,14}$/.test(barcode)) {
+    return res.status(400).json({ error: 'Invalid barcode format.' });
+  }
+
+  try {
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) throw new Error('Upstream API error');
+    const json = await response.json();
+
+    if (json.status !== 1 || !json.product) {
+      return res.status(404).json({ error: 'Product not found for this barcode.' });
+    }
+
+    const p = json.product;
+    res.json({
+      name:     p.product_name || 'Unknown product',
+      calories: p.nutriments?.['energy-kcal_100g'] ?? null,
+      protein:  p.nutriments?.proteins_100g ?? null,
+      carbs:    p.nutriments?.carbohydrates_100g ?? null,
+      fat:      p.nutriments?.fat_100g ?? null,
+    });
+  } catch (err) {
+    console.error('Barcode lookup error:', err.message || err);
+    res.status(502).json({ error: 'Barcode lookup unavailable. Please enter details manually.' });
+  }
+});
+
 // ── Start server ─────────────────────────────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, () => {
