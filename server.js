@@ -76,6 +76,23 @@ db.exec(`
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS exercise_plans (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    trainer_id INTEGER NOT NULL,
+    name       TEXT    NOT NULL,
+    data       TEXT    NOT NULL,
+    FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS plan_assignments (
+    plan_id     INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    assigned_at TEXT    NOT NULL,
+    PRIMARY KEY (plan_id, user_id),
+    FOREIGN KEY (plan_id)  REFERENCES exercise_plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: add role column to databases created before this feature
@@ -105,6 +122,14 @@ const stmts = {
   removeAssignment: db.prepare('DELETE FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
   getAssignedUsers: db.prepare('SELECT u.id, u.username, u.role FROM users u JOIN trainer_assignments ta ON ta.user_id = u.id WHERE ta.trainer_id = ? ORDER BY u.username COLLATE NOCASE'),
   isAssigned:       db.prepare('SELECT 1 FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
+  listPlans:        db.prepare('SELECT id, name, data FROM exercise_plans WHERE trainer_id = ? ORDER BY name COLLATE NOCASE'),
+  insertPlan:       db.prepare('INSERT INTO exercise_plans (trainer_id, name, data) VALUES (?, ?, ?)'),
+  getPlanById:      db.prepare('SELECT id, name, data FROM exercise_plans WHERE id = ? AND trainer_id = ?'),
+  deletePlan:       db.prepare('DELETE FROM exercise_plans WHERE id = ? AND trainer_id = ?'),
+  assignPlan:       db.prepare('INSERT OR IGNORE INTO plan_assignments (plan_id, user_id, assigned_at) VALUES (?, ?, ?)'),
+  unassignPlan:     db.prepare('DELETE FROM plan_assignments WHERE plan_id = ? AND user_id = ?'),
+  getUserPlans:     db.prepare('SELECT ep.id, ep.name, ep.data FROM exercise_plans ep JOIN plan_assignments pa ON pa.plan_id = ep.id WHERE pa.user_id = ? ORDER BY ep.name COLLATE NOCASE'),
+  getUserPlansByTrainer: db.prepare('SELECT ep.id, ep.name, ep.data, pa.assigned_at FROM exercise_plans ep JOIN plan_assignments pa ON pa.plan_id = ep.id WHERE pa.user_id = ? AND ep.trainer_id = ? ORDER BY ep.name COLLATE NOCASE'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -411,6 +436,61 @@ app.get('/api/trainer/users/:id/weights', requireAuth, requireTrainer, trainerCa
 app.get('/api/trainer/users/:id/calories', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
   const rows = stmts.getCalories.all(req.targetUserId);
   res.json(rows.map(r => ({ ...JSON.parse(r.data), id: r.id })));
+});
+
+// ── Exercise plan routes (trainer) ────────────────────────────────────────
+app.get('/api/trainer/plans', requireAuth, requireTrainer, (req, res) => {
+  const rows = stmts.listPlans.all(req.user.userId);
+  res.json(rows.map(r => ({ id: r.id, name: r.name, exercises: JSON.parse(r.data) })));
+});
+
+app.post('/api/trainer/plans', requireAuth, requireTrainer, (req, res) => {
+  const { name, exercises } = req.body || {};
+  if (!name || !Array.isArray(exercises) || exercises.length === 0) {
+    return res.status(400).json({ error: 'Plan name and at least one exercise are required.' });
+  }
+  const info = stmts.insertPlan.run(req.user.userId, name.trim(), JSON.stringify(exercises));
+  res.status(201).json({ ok: true, id: info.lastInsertRowid });
+});
+
+app.delete('/api/trainer/plans/:id', requireAuth, requireTrainer, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid plan id.' });
+  const info = stmts.deletePlan.run(id, req.user.userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Plan not found.' });
+  res.json({ ok: true });
+});
+
+app.get('/api/trainer/users/:id/plans', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const trainerId = req.user.role === 'admin' ? null : req.user.userId;
+  const rows = trainerId
+    ? stmts.getUserPlansByTrainer.all(req.targetUserId, trainerId)
+    : stmts.getUserPlans.all(req.targetUserId);
+  res.json(rows.map(r => ({ id: r.id, name: r.name, exercises: JSON.parse(r.data), assignedAt: r.assigned_at })));
+});
+
+app.post('/api/trainer/users/:id/plans', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const { planId } = req.body || {};
+  const pid = parseInt(planId, 10);
+  if (!Number.isFinite(pid)) return res.status(400).json({ error: 'planId is required.' });
+  const plan = stmts.getPlanById.get(pid, req.user.userId);
+  if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  stmts.assignPlan.run(pid, req.targetUserId, new Date().toISOString().split('T')[0]);
+  res.status(201).json({ ok: true });
+});
+
+app.delete('/api/trainer/users/:id/plans/:planId', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  const planId = parseInt(req.params.planId, 10);
+  if (!Number.isFinite(planId)) return res.status(400).json({ error: 'Invalid plan id.' });
+  const info = stmts.unassignPlan.run(planId, req.targetUserId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Plan assignment not found.' });
+  res.json({ ok: true });
+});
+
+// ── User: view own assigned plans ─────────────────────────────────────────
+app.get('/api/plans', requireAuth, (req, res) => {
+  const rows = stmts.getUserPlans.all(req.user.userId);
+  res.json(rows.map(r => ({ id: r.id, name: r.name, exercises: JSON.parse(r.data) })));
 });
 
 // ── Barcode lookup ────────────────────────────────────────────────────────────
