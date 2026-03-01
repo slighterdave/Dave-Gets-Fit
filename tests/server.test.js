@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Integration tests for the Dave Gets Fit backend API.
+ * Integration tests for the GetUs.Fit backend API.
  * Uses Node.js built-in test runner (node --test).
  */
 

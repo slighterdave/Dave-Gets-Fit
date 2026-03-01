@@ -301,7 +301,7 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
   try {
     const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=true&page_size=10&fields=product_name,nutriments`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
     });
 
@@ -423,7 +423,7 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
   try {
     const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
     });
 
@@ -451,7 +451,7 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
 // ── Start server ─────────────────────────────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Dave Gets Fit server running on http://localhost:${PORT}`);
+    console.log(`GetUs.Fit server running on http://localhost:${PORT}`);
   });
 }
 

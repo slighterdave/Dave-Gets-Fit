@@ -1,7 +1,7 @@
 {
-  "name": "dave-gets-fit",
+  "name": "getus-fit",
   "version": "1.0.0",
-  "description": "Dave Gets Fit – fitness tracking web app",
+  "description": "GetUs.Fit – fitness tracking web app",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

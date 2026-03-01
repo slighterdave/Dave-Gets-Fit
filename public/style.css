@@ -36,6 +36,11 @@ nav .brand {
   text-shadow: 0 0 12px rgba(204,26,26,0.6);
 }
 
+nav .brand-logo {
+  height: 40px;
+  display: block;
+}
+
 nav a {
   color: #999;
   text-decoration: none;

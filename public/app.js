@@ -1,5 +1,5 @@
 /**
- * Dave Gets Fit – shared utilities
+ * GetUs.Fit – shared utilities
  * Uses a REST API backend to persist data server-side.
  */
 
