@@ -25,6 +25,12 @@ NGINX_ENABLED="/etc/nginx/sites-enabled/${NGINX_SITE}"
 SERVICE_NAME="getus-fit"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NODE_PORT=3000
+# Public domain name – used to obtain a Let's Encrypt TLS certificate.
+# Override at runtime if needed: DOMAIN=other.example.com sudo ./deploy.sh
+DOMAIN="${DOMAIN:-getus.fit}"
+# Email address for Let's Encrypt expiry notifications (optional but recommended).
+#   LE_EMAIL=you@example.com DOMAIN=... sudo ./deploy.sh
+LE_EMAIL="${LE_EMAIL:-}"
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Ensure the script is run as root (or via sudo)
@@ -36,8 +42,8 @@ fi
 echo "==> Updating package lists..."
 apt-get update -qq
 
-echo "==> Installing dependencies (git, nginx, nodejs)..."
-apt-get install -y -qq git nginx curl
+echo "==> Installing dependencies (git, nginx, nodejs, certbot)..."
+apt-get install -y -qq git nginx curl certbot python3-certbot-nginx
 
 # Install Node.js 20.x LTS if not already installed or version is too old
 if ! command -v node &>/dev/null || [[ "$(node -e 'process.exit(parseInt(process.version.slice(1)) < 18 ? 1 : 0)' ; echo $?)" == "1" ]]; then
@@ -100,12 +106,12 @@ systemctl restart "${SERVICE_NAME}"
 echo "    Backend service started."
 
 echo "==> Configuring Nginx..."
-cat > "${NGINX_CONF}" <<'NGINX'
+cat > "${NGINX_CONF}" <<NGINX
 server {
     listen 80;
     listen [::]:80;
 
-    server_name _;
+    server_name ${DOMAIN:-_} www.${DOMAIN:-_};
 
     # Security headers
     add_header X-Frame-Options       "SAMEORIGIN"   always;
@@ -116,10 +122,10 @@ server {
     location /api/ {
         proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
     }
 
     # Serve static frontend files
@@ -127,15 +133,15 @@ server {
     index index.html;
 
     location / {
-        try_files $uri $uri/ =404;
+        try_files \$uri \$uri/ =404;
     }
 
     # Deny access to hidden files, the .git directory, and server-side files
-    location ~ /\. {
+    location ~ /\\. {
         deny all;
     }
 
-    location ~* \.(db)$ {
+    location ~* \\.(db)\$ {
         deny all;
     }
 }
@@ -152,7 +158,25 @@ echo "==> Reloading Nginx..."
 systemctl enable nginx
 systemctl is-active --quiet nginx && systemctl reload nginx || systemctl restart nginx
 
+# Obtain a TLS certificate and enable HTTPS if a domain was supplied
+if [[ -n "${DOMAIN}" ]]; then
+  echo "==> Obtaining TLS certificate from Let's Encrypt for ${DOMAIN} and www.${DOMAIN}..."
+  CERTBOT_ARGS=(--nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --agree-tos --redirect)
+  if [[ -n "${LE_EMAIL}" ]]; then
+    CERTBOT_ARGS+=(--email "${LE_EMAIL}")
+  else
+    CERTBOT_ARGS+=(--register-unsafely-without-email)
+  fi
+  certbot "${CERTBOT_ARGS[@]}"
+  echo "    HTTPS certificate installed. Auto-renewal is handled by the certbot systemd timer."
+fi
+
 echo ""
 PUBLIC_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || hostname -I | awk '{print $1}')
 echo "✅  Deployment complete!"
-echo "    The site is now being served at http://${PUBLIC_IP}"
+if [[ -n "${DOMAIN}" ]]; then
+  echo "    The site is now being served at https://${DOMAIN}"
+else
+  echo "    The site is now being served at http://${PUBLIC_IP}"
+  echo "    Tip: re-run with DOMAIN=your.domain.com to enable HTTPS."
+fi
