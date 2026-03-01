@@ -102,8 +102,8 @@ echo "    Backend service started."
 echo "==> Configuring Nginx..."
 cat > "${NGINX_CONF}" <<'NGINX'
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen 80;
+    listen [::]:80;
 
     server_name _;
 
