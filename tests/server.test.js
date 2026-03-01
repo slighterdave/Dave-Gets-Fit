@@ -18,6 +18,7 @@ process.env.PORT = '0'; // Let OS pick a free port
 
 // Load the app (it calls app.listen internally; we grab the server via module.exports)
 const app = require('../server.js');
+const { db } = app;
 
 let server;
 let baseUrl;
@@ -279,4 +280,157 @@ test('users cannot see each other\'s data', async () => {
   // Bob should see 1
   const { body: bobWeights } = await req('GET', '/api/weights', undefined, bobToken);
   assert.equal(bobWeights.length, 1);
+});
+
+// ── Roles ─────────────────────────────────────────────────────────────────────
+test('registered users get role "user" in JWT', async () => {
+  const { body } = await req('POST', '/api/auth/register', { username: 'carol', password: 'password123' });
+  assert.ok(body.token);
+  const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'user');
+});
+
+test('login token includes role from database', async () => {
+  const { body } = await req('POST', '/api/auth/login', { username: 'alice', password: 'password123' });
+  const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'user');
+});
+
+// ── Admin routes ──────────────────────────────────────────────────────────────
+let adminToken;
+let carolId;
+let trainerToken;
+let trainerUserId;
+
+test('setup: seed admin user directly in DB and login', async () => {
+  // Promote alice to admin via DB so we have a bootstrap admin
+  db.prepare("UPDATE users SET role = ? WHERE username = ?").run('admin', 'alice');
+  const { body } = await req('POST', '/api/auth/login', { username: 'alice', password: 'password123' });
+  adminToken = body.token;
+  const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'admin');
+});
+
+test('non-admin cannot list users', async () => {
+  const { body: carolAuth } = await req('POST', '/api/auth/login', { username: 'carol', password: 'password123' });
+  const { status } = await req('GET', '/api/admin/users', undefined, carolAuth.token);
+  assert.equal(status, 403);
+});
+
+test('admin can list all users', async () => {
+  const { status, body } = await req('GET', '/api/admin/users', undefined, adminToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.ok(body.length >= 3);
+  body.forEach(u => {
+    assert.ok(u.id);
+    assert.ok(u.username);
+    assert.ok(u.role);
+  });
+  carolId = body.find(u => u.username === 'carol').id;
+});
+
+test('admin can promote user to trainer', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { role: 'trainer' }, adminToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const carol = users.find(u => u.id === carolId);
+  assert.equal(carol.role, 'trainer');
+});
+
+test('admin update rejects invalid role', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { role: 'superuser' }, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('admin cannot delete their own account', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = users.find(u => u.username === 'alice').id;
+  const { status } = await req('DELETE', `/api/admin/users/${aliceId}`, undefined, adminToken);
+  assert.equal(status, 400);
+});
+
+test('admin can assign trainer to user', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobUser = users.find(u => u.username === 'bob');
+
+  const { status, body } = await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: bobUser.id }, adminToken);
+  assert.equal(status, 201);
+  assert.equal(body.ok, true);
+});
+
+test('assigning a non-trainer returns 400', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobUser = users.find(u => u.username === 'bob');
+  // Try assigning bob (a 'user') as a trainer
+  const { status, body } = await req('POST', '/api/admin/assignments', { trainerId: bobUser.id, userId: carolId }, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+// ── Trainer routes ────────────────────────────────────────────────────────────
+test('setup: login carol as trainer', async () => {
+  const { body } = await req('POST', '/api/auth/login', { username: 'carol', password: 'password123' });
+  trainerToken = body.token;
+  const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'trainer');
+});
+
+test('trainer can list their assigned users', async () => {
+  const { status, body } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].username, 'bob');
+});
+
+test('trainer can view assigned user weights', async () => {
+  const { body: users } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  const bobId = users[0].id;
+  const { status, body } = await req('GET', `/api/trainer/users/${bobId}/weights`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+});
+
+test('trainer cannot view unassigned user data', async () => {
+  // alice is not assigned to carol
+  const { body: allUsers } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = allUsers.find(u => u.username === 'alice').id;
+  const { status } = await req('GET', `/api/trainer/users/${aliceId}/weights`, undefined, trainerToken);
+  assert.equal(status, 403);
+});
+
+test('regular user cannot access trainer routes', async () => {
+  const { body: bobAuth } = await req('POST', '/api/auth/login', { username: 'bob', password: 'password123' });
+  const { status } = await req('GET', '/api/trainer/users', undefined, bobAuth.token);
+  assert.equal(status, 403);
+});
+
+test('admin can remove trainer assignment', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobUser = users.find(u => u.username === 'bob');
+  const { status, body } = await req('DELETE', `/api/admin/assignments/${carolId}/${bobUser.id}`, undefined, adminToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  // Carol should now see empty list
+  const { body: assigned } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  assert.equal(assigned.length, 0);
+});
+
+test('admin can delete a user', async () => {
+  // Register a throwaway user, then admin deletes them
+  const { body: tmpAuth } = await req('POST', '/api/auth/register', { username: 'tmp_user', password: 'password123' });
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const tmpId = users.find(u => u.username === 'tmp_user').id;
+
+  const { status, body } = await req('DELETE', `/api/admin/users/${tmpId}`, undefined, adminToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: afterUsers } = await req('GET', '/api/admin/users', undefined, adminToken);
+  assert.ok(!afterUsers.find(u => u.username === 'tmp_user'));
 });
