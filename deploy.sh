@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh – Deploy Dave-Gets-Fit to an Ubuntu server on AWS EC2.
+# deploy.sh – Deploy GetUs.Fit to an Ubuntu server on AWS EC2.
 #
 # Usage (first time):
 #   chmod +x deploy.sh
@@ -17,12 +17,12 @@ set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/slighterdave/Dave-Gets-Fit.git"
-APP_DIR="/var/www/dave-gets-fit"
+APP_DIR="/var/www/getus-fit"
 APP_USER="ubuntu"
-NGINX_SITE="dave-gets-fit"
+NGINX_SITE="getus-fit"
 NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE}"
 NGINX_ENABLED="/etc/nginx/sites-enabled/${NGINX_SITE}"
-SERVICE_NAME="dave-gets-fit"
+SERVICE_NAME="getus-fit"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NODE_PORT=3000
 # ──────────────────────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ chmod 755 "${APP_DIR}/server.js"
 echo "==> Configuring systemd service..."
 cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
-Description=Dave Gets Fit backend
+Description=GetUs.Fit backend
 After=network.target
 
 [Service]
@@ -123,7 +123,7 @@ server {
     }
 
     # Serve static frontend files
-    root /var/www/dave-gets-fit/public;
+    root /var/www/getus-fit/public;
     index index.html;
 
     location / {

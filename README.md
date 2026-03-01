@@ -1,4 +1,4 @@
-# Dave Gets Fit
+# GetUs.Fit
 
 A personal fitness tracking web app for logging workouts, weight, and calories. Built with a Node.js/Express backend, a SQLite database, and a plain HTML/CSS/JS frontend served by nginx.
 
@@ -87,12 +87,12 @@ sudo bash deploy.sh
 
 What the script does:
 1. Installs `git`, `nginx`, `curl`, and **Node.js 20.x LTS** (via the NodeSource repository).
-2. Clones the repository to `/var/www/dave-gets-fit` (or pulls the latest changes if already cloned).
+2. Clones the repository to `/var/www/getus-fit` (or pulls the latest changes if already cloned).
 3. Runs `npm ci --omit=dev` to install production dependencies.
-4. Creates and enables a **systemd service** (`dave-gets-fit`) that starts the Node.js backend on port 3000 and restarts it automatically on failure.
+4. Creates and enables a **systemd service** (`getus-fit`) that starts the Node.js backend on port 3000 and restarts it automatically on failure.
 5. Writes an **nginx virtual-host** that:
    - Proxies `/api/*` requests to the Node.js backend.
-   - Serves the static frontend from `/var/www/dave-gets-fit/public/`.
+   - Serves the static frontend from `/var/www/getus-fit/public/`.
    - Denies access to hidden files and `.db` files.
 
 After the script finishes it prints the public IP address where the site is live.
@@ -121,10 +121,10 @@ node --version   # should print v20.x.x
 #### 3. Clone the repository
 
 ```bash
-sudo mkdir -p /var/www/dave-gets-fit
-sudo chown ubuntu:ubuntu /var/www/dave-gets-fit
-git clone https://github.com/slighterdave/Dave-Gets-Fit.git /var/www/dave-gets-fit
-cd /var/www/dave-gets-fit
+sudo mkdir -p /var/www/getus-fit
+sudo chown ubuntu:ubuntu /var/www/getus-fit
+git clone https://github.com/slighterdave/Dave-Gets-Fit.git /var/www/getus-fit
+cd /var/www/getus-fit
 ```
 
 #### 4. Install production Node.js dependencies
@@ -139,43 +139,43 @@ This installs Express, better-sqlite3, jsonwebtoken, bcryptjs, and express-rate-
 
 ```bash
 node server.js
-# Dave Gets Fit server running on http://localhost:3000
+# GetUs.Fit server running on http://localhost:3000
 # Press Ctrl+C to stop
 ```
 
 #### 6. Create a systemd service so the backend starts automatically
 
 ```bash
-sudo tee /etc/systemd/system/dave-gets-fit.service > /dev/null <<'EOF'
+sudo tee /etc/systemd/system/getus-fit.service > /dev/null <<'EOF'
 [Unit]
-Description=Dave Gets Fit backend
+Description=GetUs.Fit backend
 After=network.target
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/var/www/dave-gets-fit
-ExecStart=/usr/bin/node /var/www/dave-gets-fit/server.js
+WorkingDirectory=/var/www/getus-fit
+ExecStart=/usr/bin/node /var/www/getus-fit/server.js
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=DB_PATH=/var/www/dave-gets-fit/data.db
+Environment=DB_PATH=/var/www/getus-fit/data.db
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable dave-gets-fit
-sudo systemctl start dave-gets-fit
-sudo systemctl status dave-gets-fit   # should show "active (running)"
+sudo systemctl enable getus-fit
+sudo systemctl start getus-fit
+sudo systemctl status getus-fit   # should show "active (running)"
 ```
 
 #### 7. Configure nginx
 
 ```bash
-sudo tee /etc/nginx/sites-available/dave-gets-fit > /dev/null <<'EOF'
+sudo tee /etc/nginx/sites-available/getus-fit > /dev/null <<'EOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -195,7 +195,7 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    root  /var/www/dave-gets-fit/public;
+    root  /var/www/getus-fit/public;
     index index.html;
 
     location / {
@@ -212,8 +212,8 @@ server {
 }
 EOF
 
-sudo ln -sf /etc/nginx/sites-available/dave-gets-fit \
-            /etc/nginx/sites-enabled/dave-gets-fit
+sudo ln -sf /etc/nginx/sites-available/getus-fit \
+            /etc/nginx/sites-enabled/getus-fit
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t        # test configuration
 sudo systemctl enable nginx
@@ -231,7 +231,7 @@ The site is now live on port 80. The Node.js process creates `data.db` automatic
 | Context | Path |
 |---------|------|
 | Local development | `<project-root>/data.db` |
-| Production (default) | `/var/www/dave-gets-fit/data.db` |
+| Production (default) | `/var/www/getus-fit/data.db` |
 
 The path can be overridden with the `DB_PATH` environment variable (see [Environment Variables](#environment-variables)).
 
@@ -258,7 +258,7 @@ sudo apt-get install -y sqlite3
 Open the database:
 
 ```bash
-sqlite3 /var/www/dave-gets-fit/data.db
+sqlite3 /var/www/getus-fit/data.db
 ```
 
 Useful commands inside the SQLite shell:
@@ -301,27 +301,27 @@ These are normal and are managed automatically; do not delete them while the ser
 
 ```bash
 # Creates a consistent snapshot even while the app is writing
-sqlite3 /var/www/dave-gets-fit/data.db \
-  "VACUUM INTO '/var/backups/dave-gets-fit-$(date +%F).db'"
+sqlite3 /var/www/getus-fit/data.db \
+  "VACUUM INTO '/var/backups/getus-fit-$(date +%F).db'"
 ```
 
 **Offline backup (server stopped):**
 
 ```bash
-sudo systemctl stop dave-gets-fit
-cp /var/www/dave-gets-fit/data.db /var/backups/dave-gets-fit-$(date +%F).db
-sudo systemctl start dave-gets-fit
+sudo systemctl stop getus-fit
+cp /var/www/getus-fit/data.db /var/backups/getus-fit-$(date +%F).db
+sudo systemctl start getus-fit
 ```
 
 **Restore from backup:**
 
 ```bash
-sudo systemctl stop dave-gets-fit
-cp /var/backups/dave-gets-fit-<DATE>.db /var/www/dave-gets-fit/data.db
+sudo systemctl stop getus-fit
+cp /var/backups/getus-fit-<DATE>.db /var/www/getus-fit/data.db
 # Remove WAL files so SQLite starts clean
-rm -f /var/www/dave-gets-fit/data.db-wal \
-      /var/www/dave-gets-fit/data.db-shm
-sudo systemctl start dave-gets-fit
+rm -f /var/www/getus-fit/data.db-wal \
+      /var/www/getus-fit/data.db-shm
+sudo systemctl start getus-fit
 ```
 
 **Automated daily backups with cron:**
@@ -331,9 +331,9 @@ Create a backup script:
 ```bash
 sudo tee /usr/local/bin/dgf-backup.sh > /dev/null <<'EOF'
 #!/usr/bin/env bash
-BACKUP_DIR="/var/backups/dave-gets-fit"
+BACKUP_DIR="/var/backups/getus-fit"
 mkdir -p "$BACKUP_DIR"
-sqlite3 /var/www/dave-gets-fit/data.db \
+sqlite3 /var/www/getus-fit/data.db \
   "VACUUM INTO '${BACKUP_DIR}/data-$(date +%F).db'"
 # Keep only the last 30 daily backups
 find "$BACKUP_DIR" -name 'data-*.db' -mtime +30 -delete
@@ -364,14 +364,14 @@ Set variables in the systemd service file under `[Service]`:
 
 ```ini
 Environment=JWT_SECRET=your-long-random-secret-here
-Environment=DB_PATH=/var/www/dave-gets-fit/data.db
+Environment=DB_PATH=/var/www/getus-fit/data.db
 ```
 
 Then reload the service:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart dave-gets-fit
+sudo systemctl restart getus-fit
 ```
 
 ---
