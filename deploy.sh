@@ -111,7 +111,7 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
 
-    server_name ${DOMAIN:-_};
+    server_name ${DOMAIN:-_} www.${DOMAIN:-_};
 
     # Security headers
     add_header X-Frame-Options       "SAMEORIGIN"   always;
@@ -162,8 +162,8 @@ systemctl is-active --quiet nginx && systemctl reload nginx || systemctl restart
 
 # Obtain a TLS certificate and enable HTTPS if a domain was supplied
 if [[ -n "${DOMAIN}" ]]; then
-  echo "==> Obtaining TLS certificate from Let's Encrypt for ${DOMAIN}..."
-  CERTBOT_ARGS=(--nginx -d "${DOMAIN}" --non-interactive --agree-tos --redirect)
+  echo "==> Obtaining TLS certificate from Let's Encrypt for ${DOMAIN} and www.${DOMAIN}..."
+  CERTBOT_ARGS=(--nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --agree-tos --redirect)
   if [[ -n "${LE_EMAIL}" ]]; then
     CERTBOT_ARGS+=(--email "${LE_EMAIL}")
   else

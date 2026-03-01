@@ -72,7 +72,7 @@ Open `http://localhost:3000` in your browser. The SQLite database file (`data.db
 - Ubuntu 20.04, 22.04, or 24.04
 - A server/VM with at least 512 MB RAM
 - Inbound TCP port **80** and **443** open in your firewall / EC2 Security Group
-- The domain `getus.fit` pointed at the server's public IP (A record)
+- The domain `getus.fit` **and** `www.getus.fit` pointed at the server's public IP (A records for both)
 - Outbound TCP port **443** to reach `github.com` and `deb.nodesource.com`
 - Root or `sudo` access
 
@@ -96,7 +96,7 @@ What the script does:
    - Proxies `/api/*` requests to the Node.js backend.
    - Serves the static frontend from `/var/www/getus-fit/public/`.
    - Denies access to hidden files and `.db` files.
-6. Runs **Certbot** to obtain a free Let's Encrypt TLS certificate for `getus.fit`, configures nginx for HTTPS on port 443, and sets up an HTTP → HTTPS redirect. Certificate renewal is handled automatically by the certbot systemd timer.
+6. Runs **Certbot** to obtain a free Let's Encrypt TLS certificate covering both `getus.fit` and `www.getus.fit`, configures nginx for HTTPS on port 443, and sets up an HTTP → HTTPS redirect. Certificate renewal is handled automatically by the certbot systemd timer.
 
 After the script finishes it prints the URL where the site is live (`https://getus.fit`).
 
