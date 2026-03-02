@@ -44,7 +44,7 @@ echo "==> Updating package lists..."
 apt-get update -qq
 
 echo "==> Installing dependencies (git, nginx, nodejs, certbot)..."
-apt-get install -y -qq git nginx curl certbot python3-certbot-nginx
+apt-get install -y -qq git nginx curl certbot python3-certbot-nginx psmisc
 
 # Install Node.js 20.x LTS if not already installed or version is too old
 if ! command -v node &>/dev/null || [[ "$(node -e 'process.exit(parseInt(process.version.slice(1)) < 18 ? 1 : 0)' ; echo $?)" == "1" ]]; then
@@ -111,7 +111,7 @@ Type=simple
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}
 ExecStart=/usr/bin/node ${APP_DIR}/server.js
-Restart=on-failure
+Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=${NODE_PORT}
@@ -121,6 +121,13 @@ Environment=DB_PATH=${DATA_DIR}/data.db
 [Install]
 WantedBy=multi-user.target
 SERVICE
+
+echo "==> Ensuring port ${NODE_PORT} is free before starting the service..."
+PORT_PIDS=$(fuser "${NODE_PORT}/tcp" 2>/dev/null || true)
+if [[ -n "${PORT_PIDS}" ]]; then
+  echo "    Terminating process(es) holding port ${NODE_PORT}: ${PORT_PIDS}"
+  fuser -k "${NODE_PORT}/tcp" 2>/dev/null || true
+fi
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
