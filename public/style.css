@@ -396,8 +396,8 @@ tbody tr:hover {
 }
 
 .feature-card .feature-icon {
-  height: 80px;
-  width: auto;
+  width: 120px;
+  height: 120px;
   object-fit: contain;
 }
 
@@ -490,7 +490,8 @@ tbody tr:hover {
   }
 
   .feature-card .feature-icon {
-    height: 64px;
+    width: 96px;
+    height: 96px;
   }
 
   h1 {
