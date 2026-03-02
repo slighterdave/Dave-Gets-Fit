@@ -510,10 +510,10 @@
       }
 
       video.srcObject = stream;
-      await video.play();
       overlay.style.display = 'flex';
       statusEl.textContent = 'Point camera at a barcode…';
       scanning = true;
+      await video.play().catch(err => { console.warn('video.play() failed:', err); });
 
       async function detect() {
         if (!scanning) return;
