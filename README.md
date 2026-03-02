@@ -155,6 +155,10 @@ node server.js
 #### 6. Create a systemd service so the backend starts automatically
 
 ```bash
+sudo mkdir -p /var/lib/getus-fit
+sudo chown ubuntu:ubuntu /var/lib/getus-fit
+sudo chmod 750 /var/lib/getus-fit
+
 sudo tee /etc/systemd/system/getus-fit.service > /dev/null <<'EOF'
 [Unit]
 Description=GetUs.Fit backend
@@ -169,7 +173,8 @@ Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=DB_PATH=/var/www/getus-fit/data.db
+Environment=DATA_DIR=/var/lib/getus-fit
+Environment=DB_PATH=/var/lib/getus-fit/data.db
 
 [Install]
 WantedBy=multi-user.target
@@ -240,7 +245,7 @@ The site is now live on port 80. The Node.js process creates `data.db` automatic
 | Context | Path |
 |---------|------|
 | Local development | `<project-root>/data.db` |
-| Production (default) | `/var/www/getus-fit/data.db` |
+| Production (automated deploy) | `/var/lib/getus-fit/data.db` |
 
 The path can be overridden with the `DB_PATH` environment variable (see [Environment Variables](#environment-variables)).
 
@@ -267,7 +272,7 @@ sudo apt-get install -y sqlite3
 Open the database:
 
 ```bash
-sqlite3 /var/www/getus-fit/data.db
+sqlite3 /var/lib/getus-fit/data.db
 ```
 
 Useful commands inside the SQLite shell:
@@ -310,7 +315,7 @@ These are normal and are managed automatically; do not delete them while the ser
 
 ```bash
 # Creates a consistent snapshot even while the app is writing
-sqlite3 /var/www/getus-fit/data.db \
+sqlite3 /var/lib/getus-fit/data.db \
   "VACUUM INTO '/var/backups/getus-fit-$(date +%F).db'"
 ```
 
@@ -318,7 +323,7 @@ sqlite3 /var/www/getus-fit/data.db \
 
 ```bash
 sudo systemctl stop getus-fit
-cp /var/www/getus-fit/data.db /var/backups/getus-fit-$(date +%F).db
+cp /var/lib/getus-fit/data.db /var/backups/getus-fit-$(date +%F).db
 sudo systemctl start getus-fit
 ```
 
@@ -326,10 +331,10 @@ sudo systemctl start getus-fit
 
 ```bash
 sudo systemctl stop getus-fit
-cp /var/backups/getus-fit-<DATE>.db /var/www/getus-fit/data.db
+cp /var/backups/getus-fit-<DATE>.db /var/lib/getus-fit/data.db
 # Remove WAL files so SQLite starts clean
-rm -f /var/www/getus-fit/data.db-wal \
-      /var/www/getus-fit/data.db-shm
+rm -f /var/lib/getus-fit/data.db-wal \
+      /var/lib/getus-fit/data.db-shm
 sudo systemctl start getus-fit
 ```
 
@@ -342,7 +347,7 @@ sudo tee /usr/local/bin/dgf-backup.sh > /dev/null <<'EOF'
 #!/usr/bin/env bash
 BACKUP_DIR="/var/backups/getus-fit"
 mkdir -p "$BACKUP_DIR"
-sqlite3 /var/www/getus-fit/data.db \
+sqlite3 /var/lib/getus-fit/data.db \
   "VACUUM INTO '${BACKUP_DIR}/data-$(date +%F).db'"
 # Keep only the last 30 daily backups
 find "$BACKUP_DIR" -name 'data-*.db' -mtime +30 -delete
@@ -365,15 +370,17 @@ sudo crontab -e
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3000` | TCP port the Node.js server listens on |
-| `DB_PATH` | `<project-root>/data.db` | Absolute path to the SQLite database file |
-| `JWT_SECRET` | *(auto-generated)* | Secret used to sign JWT tokens. If not set, a random 96-character hex string is generated and saved to `.jwt_secret` in the project root. Set this explicitly in production for predictable key rotation. |
+| `DATA_DIR` | `<project-root>` | Directory where `data.db` and `.jwt_secret` are stored. In production (automated deploy) this is `/var/lib/getus-fit`. |
+| `DB_PATH` | `<DATA_DIR>/data.db` | Absolute path to the SQLite database file. Overrides `DATA_DIR` for the database location. |
+| `JWT_SECRET` | *(auto-generated)* | Secret used to sign JWT tokens. If not set, a random 96-character hex string is generated and saved to `.jwt_secret` in `DATA_DIR`. Set this explicitly in production for predictable key rotation. |
 | `NODE_ENV` | *(unset)* | Set to `production` for production deployments |
 
 Set variables in the systemd service file under `[Service]`:
 
 ```ini
 Environment=JWT_SECRET=your-long-random-secret-here
-Environment=DB_PATH=/var/www/getus-fit/data.db
+Environment=DATA_DIR=/var/lib/getus-fit
+Environment=DB_PATH=/var/lib/getus-fit/data.db
 ```
 
 Then reload the service:
