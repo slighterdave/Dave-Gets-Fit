@@ -385,6 +385,44 @@ test('admin update rejects invalid role', async () => {
   assert.ok(body.error);
 });
 
+test('admin can update username', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { username: 'carol_renamed' }, adminToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const carol = users.find(u => u.id === carolId);
+  assert.equal(carol.username, 'carol_renamed');
+  // Rename back for subsequent tests
+  await req('PUT', `/api/admin/users/${carolId}`, { username: 'carol' }, adminToken);
+});
+
+test('admin update rejects duplicate username', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { username: 'alice' }, adminToken);
+  assert.equal(status, 409);
+  assert.ok(body.error);
+});
+
+test('admin update rejects invalid username format', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { username: 'bad username!' }, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('admin can reset user password', async () => {
+  const { status, body } = await req('PUT', `/api/admin/users/${carolId}`, { password: 'newpassword123' }, adminToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+  // Reset password back for subsequent tests
+  await req('PUT', `/api/admin/users/${carolId}`, { password: 'password123' }, adminToken);
+});
+
+test('admin update returns 404 for non-existent user', async () => {
+  const { status, body } = await req('PUT', '/api/admin/users/99999', { username: 'nobody' }, adminToken);
+  assert.equal(status, 404);
+  assert.ok(body.error);
+});
+
 test('admin cannot delete their own account', async () => {
   const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
   const aliceId = users.find(u => u.username === 'alice').id;
@@ -410,12 +448,33 @@ test('assigning a non-trainer returns 400', async () => {
   assert.ok(body.error);
 });
 
+test('admin can list assignments for a trainer', async () => {
+  const { status, body } = await req('GET', `/api/admin/assignments/${carolId}`, undefined, adminToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].username, 'bob');
+});
+
+test('admin assignments endpoint returns 400 for non-trainer user', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobUser = users.find(u => u.username === 'bob');
+  const { status, body } = await req('GET', `/api/admin/assignments/${bobUser.id}`, undefined, adminToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
 // ── Trainer routes ────────────────────────────────────────────────────────────
 test('setup: login carol as trainer', async () => {
   const { body } = await req('POST', '/api/auth/login', { username: 'carol', password: 'password123' });
   trainerToken = body.token;
   const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
   assert.equal(payload.role, 'trainer');
+});
+
+test('non-admin cannot list trainer assignments', async () => {
+  const { status } = await req('GET', `/api/admin/assignments/${carolId}`, undefined, trainerToken);
+  assert.equal(status, 403);
 });
 
 test('trainer can list their assigned users', async () => {

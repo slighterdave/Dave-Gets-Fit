@@ -125,6 +125,24 @@
           <tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
         </tbody>
       </table>
+
+      <!-- Edit user inline form (hidden by default) -->
+      <div id="edit-user-form" style="display:none;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px;margin-top:16px;">
+        <h3 style="margin:0 0 14px;font-size:1rem;color:#cc1a1a;">Edit User</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+            <label for="edit-username" style="font-size:0.82rem;">Username</label>
+            <input type="text" id="edit-username" placeholder="username" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+            <label for="edit-password" style="font-size:0.82rem;">New Password <span style="color:#888;font-weight:400;">(leave blank to keep)</span></label>
+            <input type="password" id="edit-password" placeholder="min 8 chars" autocomplete="new-password" />
+          </div>
+          <button class="btn btn-primary btn-xs" id="edit-user-submit" style="padding:8px 18px;margin-bottom:1px;">Save</button>
+          <button class="btn-xs demote" id="edit-user-cancel" style="padding:8px 14px;margin-bottom:1px;">Cancel</button>
+        </div>
+        <div id="edit-user-error" style="color:#e55;font-size:0.85rem;margin-top:10px;"></div>
+      </div>
     </div>
 
     <!-- ── Assignments tab ───────────────────────────────────────────────── -->
@@ -192,7 +210,12 @@
     return `<span class="role-badge ${r}">${r}</span>`;
   }
 
+  function escJs(str) {
+    return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
   let allUsers = [];
+  let editingUserId = null;
 
   async function loadUsers() {
     allUsers = await API.get('/admin/users');
@@ -202,20 +225,18 @@
 
   function renderUsersTable(users) {
     const tbody = document.getElementById('users-tbody');
-    const myId = (() => {
-      try { return JSON.parse(atob(Auth._payload() ? sessionStorage.getItem('dgf_token').split('.')[1] : '')).userId; } catch { return null; }
-    })();
     tbody.innerHTML = users.map(u => `
       <tr>
         <td style="color:#555;">${u.id}</td>
-        <td>${u.username}</td>
+        <td>${escHtmlShared(u.username)}</td>
         <td>${roleBadge(u.role)}</td>
         <td>
           <div class="action-row">
+            <button class="btn-xs promote" onclick="openEditForm(${u.id},'${escJs(u.username)}')" title="Edit user">✏ Edit</button>
             <button class="btn-xs promote" onclick="setRole(${u.id},'admin')"    ${u.role==='admin'    ? 'disabled' : ''} title="Make Admin">Admin</button>
             <button class="btn-xs promote" onclick="setRole(${u.id},'trainer')"  ${u.role==='trainer'  ? 'disabled' : ''} title="Make Trainer">Trainer</button>
             <button class="btn-xs demote"  onclick="setRole(${u.id},'user')"     ${u.role==='user'     ? 'disabled' : ''} title="Make User">User</button>
-            <button class="btn-xs delete"  onclick="deleteUser(${u.id},'${u.username}')" title="Delete user">🗑</button>
+            <button class="btn-xs delete"  onclick="deleteUser(${u.id},'${escJs(u.username)}')" title="Delete user">🗑</button>
           </div>
         </td>
       </tr>`).join('');
@@ -227,10 +248,11 @@
 
     const ts = document.getElementById('assign-trainer-select');
     const us = document.getElementById('assign-user-select');
+    const prevTrainer = ts.value;
     ts.innerHTML = '<option value="">Select trainer…</option>' +
-      trainers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+      trainers.map(u => `<option value="${u.id}"${u.id === parseInt(prevTrainer, 10) ? ' selected' : ''}>${escHtmlShared(u.username)}</option>`).join('');
     us.innerHTML = '<option value="">Select athlete…</option>' +
-      athletes.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+      athletes.map(u => `<option value="${u.id}">${escHtmlShared(u.username)}</option>`).join('');
   }
 
   async function setRole(userId, newRole) {
@@ -244,9 +266,43 @@
     if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
     try {
       await API.del(`/admin/users/${userId}`);
+      // If we were editing this user, close the form
+      if (editingUserId === userId) closeEditForm();
       await loadUsers();
     } catch (e) { alert(e.message); }
   }
+
+  // ── Edit user ──────────────────────────────────────────────────────────────
+  function openEditForm(userId, username) {
+    editingUserId = userId;
+    document.getElementById('edit-username').value = username;
+    document.getElementById('edit-password').value = '';
+    document.getElementById('edit-user-error').textContent = '';
+    document.getElementById('edit-user-form').style.display = '';
+    document.getElementById('edit-username').focus();
+  }
+
+  function closeEditForm() {
+    editingUserId = null;
+    document.getElementById('edit-user-form').style.display = 'none';
+  }
+
+  document.getElementById('edit-user-cancel').addEventListener('click', closeEditForm);
+
+  document.getElementById('edit-user-submit').addEventListener('click', async () => {
+    const username = document.getElementById('edit-username').value.trim();
+    const password = document.getElementById('edit-password').value;
+    const errEl    = document.getElementById('edit-user-error');
+    errEl.textContent = '';
+    if (!username) { errEl.textContent = 'Username is required.'; return; }
+    const payload = { username };
+    if (password) payload.password = password;
+    try {
+      await API.put(`/admin/users/${editingUserId}`, payload);
+      closeEditForm();
+      await loadUsers();
+    } catch (e) { errEl.textContent = e.message; }
+  });
 
   // ── Create user ────────────────────────────────────────────────────────────
   document.getElementById('create-user-btn').addEventListener('click', () => {
@@ -278,6 +334,7 @@
       await loadUsers();
     } catch (e) { errEl.textContent = e.message; }
   });
+
   document.getElementById('assign-btn').addEventListener('click', async () => {
     const trainerId = parseInt(document.getElementById('assign-trainer-select').value);
     const userId    = parseInt(document.getElementById('assign-user-select').value);
@@ -295,22 +352,27 @@
   });
 
   async function loadAssignments(trainerId) {
-    const users = await API.get(`/trainer/users`).catch(() => []);
-    // When called as admin we get all – filter by what the API returns for this trainer
-    // Instead, re-fetch as a targeted call isn't available for admin; reuse trainer endpoint via admin token
-    // We show the existing assignments from allUsers perspective
-    const trainerUser = allUsers.find(u => u.id === trainerId);
-    if (!trainerUser) return;
-
-    // Fetch assignments via admin user list (assigned users are visible in trainer endpoint when admin calls it)
-    // Actually we need a different approach — call GET /trainer/users which returns all users for admin
-    // Instead, display from what we can derive: assignment state is shown in the assign section
     const list = document.getElementById('assignments-list');
-    // Use the trainer endpoint with current admin token to get trainer's assigned users
     try {
-      // We don't have a per-trainer admin endpoint, so show a hint
-      list.innerHTML = `<p style="color:#888;margin-top:14px;">Assignments updated. Use the trainer login to verify their athletes list.</p>`;
+      const assigned = await API.get(`/admin/assignments/${trainerId}`);
+      if (!assigned.length) {
+        list.innerHTML = '<p style="color:#888;margin-top:14px;">No athletes assigned to this trainer.</p>';
+        return;
+      }
+      list.innerHTML = assigned.map(u => `
+        <div class="assignment-item">
+          <span>${escHtmlShared(u.username)} ${roleBadge(u.role)}</span>
+          <button class="btn-xs delete" onclick="removeAssignment(${trainerId},${u.id},'${escJs(u.username)}')" title="Remove assignment">Remove</button>
+        </div>`).join('');
     } catch (e) { list.innerHTML = `<p style="color:#e00;margin-top:14px;">${e.message}</p>`; }
+  }
+
+  async function removeAssignment(trainerId, userId, username) {
+    if (!confirm(`Remove ${username} from this trainer?`)) return;
+    try {
+      await API.del(`/admin/assignments/${trainerId}/${userId}`);
+      await loadAssignments(trainerId);
+    } catch (e) { alert(e.message); }
   }
 
   // ── Trainer view (non-admin trainer) ──────────────────────────────────────
