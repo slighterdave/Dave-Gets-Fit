@@ -51,7 +51,16 @@
 
     @media (max-width: 600px) {
       .tab { padding: 8px 14px; font-size: 0.8rem; }
-      .users-table { min-width: 560px; }
+
+      /* Responsive table: rows become flex blocks */
+      .users-table thead { display: none; }
+      .users-table tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 0; border-bottom: 1px solid #2a2a2a; }
+      .users-table tr:last-child { border-bottom: none; }
+      .users-table td { display: block; padding: 0; border: none; }
+      .users-table td:first-child { display: none; }    /* hide # column */
+      .users-table td:nth-child(2) { flex: 1; }         /* username */
+      .users-table td:nth-child(3) { flex-shrink: 0; }  /* role badge */
+      .users-table td:nth-child(4) { width: 100%; }     /* actions – full row */
     }
   </style>
 </head>
@@ -117,8 +126,7 @@
         <div id="create-user-error" style="color:#e55;font-size:0.85rem;margin-top:10px;"></div>
       </div>
 
-      <div class="table-scroll">
-        <table class="users-table" id="users-table">
+      <table class="users-table" id="users-table">
           <thead>
             <tr>
               <th>#</th>
@@ -131,7 +139,6 @@
             <tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
           </tbody>
         </table>
-      </div>
 
       <!-- Edit user inline form (hidden by default) -->
       <div id="edit-user-form" style="display:none;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px;margin-top:16px;">
