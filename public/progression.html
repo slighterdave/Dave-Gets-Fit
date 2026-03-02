@@ -108,16 +108,25 @@
 
   function addExerciseRow(name = '', sets = '', reps = '', weightKg = '') {
     rowCount++;
-    const id = rowCount;
     const container = document.getElementById('exercise-list');
     const div = document.createElement('div');
     div.className = 'exercise-row';
-    div.dataset.rowId = id;
+    const groupOptions = Object.keys(EXERCISE_CATALOGUE)
+      .map(g => `<option value="${g}">${g}</option>`).join('');
     div.innerHTML = `
       <div class="exercise-row-fields">
-        <div class="form-group" style="flex:2;">
+        <div class="form-group" style="flex:1.5;min-width:140px;">
+          <label>Muscle Group</label>
+          <select class="ex-group" aria-label="Muscle group">
+            <option value="">Select group\u2026</option>
+            ${groupOptions}
+            <option value="__custom__">\u2014 Custom \u2014</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:2;min-width:140px;">
           <label>Exercise</label>
-          <input type="text" class="ex-name" placeholder="e.g. Bench Press" value="${name}" required />
+          <select class="ex-select" aria-label="Exercise" style="display:none;"><option value="">Select exercise\u2026</option></select>
+          <input type="text" class="ex-name" aria-label="Exercise" placeholder="Select a group or type custom" value="" />
         </div>
         <div class="form-group">
           <label>Sets</label>
@@ -134,6 +143,7 @@
         <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">✕</button>
       </div>
     `;
+    setupExerciseRow(div, name);
     div.querySelector('.btn-remove-exercise').addEventListener('click', () => {
       div.remove();
       if (document.querySelectorAll('.exercise-row').length === 0) addExerciseRow();
@@ -377,7 +387,7 @@
     const exercises = [];
     let valid = true;
     rows.forEach(row => {
-      const name = row.querySelector('.ex-name').value.trim();
+      const name = getExerciseName(row);
       if (!name) { valid = false; return; }
       exercises.push({
         name,
