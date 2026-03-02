@@ -3,6 +3,167 @@
  * Uses a REST API backend to persist data server-side.
  */
 
+// ── Exercise catalogue ────────────────────────────────────────────────────────
+const EXERCISE_CATALOGUE = {
+  'Lower body (squat / knee-dominant)': [
+    'Back squat (barbell)',
+    'Front squat (barbell)',
+    'Goblet squat (dumbbell/kettlebell)',
+    'Bulgarian split squat (DB/BB)',
+    'Leg press (machine)',
+    'Hack squat (machine)',
+    'Smith machine squat',
+    'Step-up (DB)',
+    'Walking lunge (DB/BB)',
+    'Reverse lunge (DB/BB)',
+    'Leg extension (machine)',
+  ],
+  'Lower body (hinge / posterior chain)': [
+    'Deadlift (conventional)',
+    'Sumo deadlift',
+    'Romanian deadlift (barbell)',
+    'Romanian deadlift (dumbbells)',
+    'Trap bar deadlift',
+    'Good morning (barbell)',
+    'Hip thrust (barbell)',
+    'Glute bridge (barbell)',
+    'Kettlebell swing',
+    'Cable pull-through',
+    'Back extension (weighted)',
+  ],
+  'Upper body push (chest/shoulders/triceps)': [
+    'Bench press (barbell)',
+    'Incline bench press (barbell)',
+    'Dumbbell bench press',
+    'Incline dumbbell press',
+    'Chest press (machine)',
+    'Overhead press (barbell)',
+    'Dumbbell shoulder press',
+    'Arnold press',
+    'Lateral raise (dumbbells/cable)',
+    'Front raise (dumbbells/plate)',
+    'Triceps pushdown (cable)',
+    'Overhead triceps extension (DB/cable)',
+    'Skull crushers (EZ-bar)',
+  ],
+  'Upper body pull (back/biceps)': [
+    'Bent-over row (barbell)',
+    'One-arm dumbbell row',
+    'Seated cable row',
+    'Lat pulldown (machine)',
+    'T-bar row',
+    'Chest-supported row (machine/DB)',
+    'Pull-up (weighted)',
+    'Chin-up (weighted)',
+    'Face pull (cable)',
+    'Rear delt fly (DB/cable)',
+    'Barbell curl',
+    'Dumbbell curl',
+    'Hammer curl',
+    'Preacher curl (machine/EZ-bar)',
+  ],
+  'Calves': [
+    'Standing calf raise (machine/Smith/DB)',
+    'Seated calf raise (machine)',
+    'Single-leg calf raise (weighted)',
+  ],
+  'Core (weighted)': [
+    'Cable crunch',
+    'Weighted sit-up',
+    'Decline sit-up (weighted)',
+    'Hanging knee/leg raise',
+    'Pallof press (cable/band)',
+    'Weighted Russian twist',
+    'Farmers carry (DB/KB)',
+    'Suitcase carry',
+  ],
+  'Full-body / power / carries': [
+    'Power clean',
+    'Hang clean',
+    'Clean and press',
+    'Push press',
+    'Thruster (barbell/dumbbells)',
+    'Dumbbell snatch',
+    'Kettlebell clean',
+    'Farmers walk',
+    'Sandbag carry',
+  ],
+};
+
+/**
+ * Wire up the muscle-group → exercise cascade selectors on an exercise row.
+ * If existingName is given, pre-selects the matching group + exercise (or
+ * selects "Custom" and fills the text input for names not in the catalogue).
+ */
+function setupExerciseRow(div, existingName) {
+  const groupSel = div.querySelector('.ex-group');
+  const exSel    = div.querySelector('.ex-select');
+  const nameIn   = div.querySelector('.ex-name');
+
+  // Find which catalogue group (if any) contains the existing name
+  let foundGroup = '';
+  if (existingName) {
+    for (const [g, exercises] of Object.entries(EXERCISE_CATALOGUE)) {
+      if (exercises.includes(existingName)) { foundGroup = g; break; }
+    }
+  }
+
+  function populateExercises(group) {
+    exSel.innerHTML = '<option value="">Select exercise\u2026</option>' +
+      (EXERCISE_CATALOGUE[group] || [])
+        .map(e => '<option value="' + escHtmlShared(e) + '">' + escHtmlShared(e) + '</option>')
+        .join('');
+  }
+
+  function onGroupChange() {
+    const g = groupSel.value;
+    if (g && g !== '__custom__') {
+      populateExercises(g);
+      exSel.style.display = '';
+      nameIn.style.display = 'none';
+      nameIn.value = '';
+    } else {
+      exSel.style.display = 'none';
+      exSel.value = '';
+      nameIn.style.display = '';
+    }
+  }
+
+  groupSel.addEventListener('change', onGroupChange);
+
+  // Initialise from existing name
+  if (foundGroup) {
+    groupSel.value = foundGroup;
+    populateExercises(foundGroup);
+    exSel.style.display = '';
+    nameIn.style.display = 'none';
+    for (let i = 0; i < exSel.options.length; i++) {
+      if (exSel.options[i].value === existingName) { exSel.options[i].selected = true; break; }
+    }
+  } else if (existingName) {
+    groupSel.value = '__custom__';
+    exSel.style.display = 'none';
+    nameIn.style.display = '';
+    nameIn.value = existingName;
+  }
+  // else: blank state – text input visible for free-form entry
+}
+
+/**
+ * Read the exercise name from a row div (works with both catalogue and custom).
+ */
+function getExerciseName(row) {
+  const exSel  = row.querySelector('.ex-select');
+  const nameIn = row.querySelector('.ex-name');
+  if (exSel && exSel.style.display !== 'none' && exSel.value) return exSel.value;
+  return nameIn ? nameIn.value.trim() : '';
+}
+
+/** Escape HTML special characters to prevent XSS */
+function escHtmlShared(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const API = {
   BASE: '/api',
 
