@@ -234,6 +234,25 @@ test('food search returns 400 when query is missing', async () => {
   assert.ok(body.error);
 });
 
+test('food search uses UK Open Food Facts endpoint', async () => {
+  let capturedUrl = null;
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      capturedUrl = url;
+      return { ok: true, json: async () => ({ products: [] }) };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    await req('GET', '/api/food/search?q=chicken', undefined, aliceToken);
+    assert.ok(capturedUrl, 'fetch to openfoodfacts should have been called');
+    assert.equal(new URL(capturedUrl).hostname, 'uk.openfoodfacts.org');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('reset user data deletes all fitness records', async () => {
   // Add some data
   await req('PUT', '/api/profile', { firstName: 'Alice' }, aliceToken);
@@ -263,6 +282,25 @@ test('barcode lookup returns 400 for invalid barcode format', async () => {
   const { status, body } = await req('GET', '/api/food/barcode/abc', undefined, aliceToken);
   assert.equal(status, 400);
   assert.ok(body.error);
+});
+
+test('barcode lookup uses UK Open Food Facts endpoint', async () => {
+  let capturedUrl = null;
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      capturedUrl = url;
+      return { ok: true, json: async () => ({ status: 0, product: null }) };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    await req('GET', '/api/food/barcode/5000112637922', undefined, aliceToken);
+    assert.ok(capturedUrl, 'fetch to openfoodfacts should have been called');
+    assert.equal(new URL(capturedUrl).hostname, 'uk.openfoodfacts.org');
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 // ── Data isolation between users ──────────────────────────────────────────────
