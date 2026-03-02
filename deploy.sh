@@ -94,6 +94,16 @@ if [[ -f "${APP_DIR}/.jwt_secret" && ! -f "${DATA_DIR}/.jwt_secret" ]]; then
   chmod 600 "${DATA_DIR}/.jwt_secret"
 fi
 
+# Remove any leftover database in the old in-repo location.  Before PR #33 the
+# server wrote to APP_DIR/data.db instead of DATA_DIR/data.db, so users that
+# registered during that period ended up in the wrong file.  Now that the fix
+# is in place we delete those stale files so the server never accidentally reads
+# or writes them again.
+if [[ -f "${APP_DIR}/data.db" ]]; then
+  echo "    Removing stale database from old location (${APP_DIR}/data.db)..."
+  rm -f "${APP_DIR}/data.db" "${APP_DIR}/data.db-wal" "${APP_DIR}/data.db-shm"
+fi
+
 echo "==> Setting file permissions..."
 chown -R ${APP_USER}:${APP_USER} "${APP_DIR}"
 find "${APP_DIR}" -type d -exec chmod 755 {} +
