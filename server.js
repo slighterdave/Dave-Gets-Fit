@@ -300,7 +300,7 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
   if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
 
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=10&fields=product_name,product_name_en,nutriments&lc=en`;
+    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=10&fields=product_name,product_name_en,nutriments&lc=en&countries_tags=united-kingdom`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
