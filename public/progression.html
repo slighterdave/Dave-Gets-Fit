@@ -402,7 +402,12 @@
       return;
     }
 
-    await API.post('/workouts', { date, notes, exercises });
+    try {
+      await API.post('/workouts', { date, notes, exercises });
+    } catch (err) {
+      showAlert(document.getElementById('form-card'), err.message || 'Failed to log workout.', 'error');
+      return;
+    }
 
     showAlert(document.getElementById('form-card'), 'Workout logged successfully!');
     document.getElementById('exercise-list').innerHTML = '';
