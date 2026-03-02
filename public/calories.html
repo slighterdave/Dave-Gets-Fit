@@ -28,7 +28,7 @@
   <p class="subtitle">Keep a daily food diary and stay on top of your calorie intake.</p>
 
   <div class="card" id="form-card">
-    <h2 style="margin-bottom:20px;color:#cc1a1a;">Log a Meal</h2>
+    <h2>Log a Meal</h2>
     <form id="calorie-form" novalidate>
       <div class="form-row">
         <div class="form-group">
@@ -125,7 +125,7 @@
   </div>
 
   <div class="card" id="progress-card">
-    <h2 style="margin-bottom:14px;color:#cc1a1a;">Daily Progress</h2>
+    <h2>Daily Progress</h2>
     <p id="progress-label" style="font-size:0.9rem;color:#888;margin-bottom:6px;"></p>
     <div class="progress-wrap">
       <div class="progress-bar" id="progress-bar" style="width:0%"></div>
@@ -150,7 +150,7 @@
 
   <!-- Macro pie chart -->
   <div class="card" id="macro-chart-card" style="display:none;">
-    <h2 style="margin-bottom:16px;color:#cc1a1a;">Macro Breakdown</h2>
+    <h2>Macro Breakdown</h2>
     <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap;">
       <canvas id="macro-chart" width="200" height="200" style="flex-shrink:0;" role="img" aria-label="Macro nutrient distribution pie chart"></canvas>
       <ul id="macro-legend" style="font-size:0.9rem;line-height:2;list-style:none;padding:0;margin:0;"></ul>
@@ -158,8 +158,9 @@
   </div>
 
   <div class="card">
-    <h2 style="margin-bottom:16px;color:#cc1a1a;">Meals for Selected Day</h2>
+    <h2>Meals for Selected Day</h2>
     <div class="empty-state" id="empty-msg">No meals logged for this day yet.</div>
+    <div class="table-scroll">
     <table id="calorie-table" style="display:none;">
       <thead>
         <tr>
@@ -174,6 +175,7 @@
       </thead>
       <tbody id="calorie-tbody"></tbody>
     </table>
+    </div>
   </div>  <!-- Camera overlay for barcode scanning -->
   <div id="barcode-overlay" role="dialog" aria-modal="true" aria-label="Barcode scanner" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;">
     <p id="barcode-status" style="color:#d4d4d4;font-size:0.95rem;margin:0;text-align:center;">Point camera at a barcode…</p>
