@@ -300,7 +300,7 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
   if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
 
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=10&fields=product_name,nutriments`;
+    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=10&fields=product_name,product_name_en,nutriments&lc=en`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
@@ -310,9 +310,9 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     const json = await response.json();
 
     const results = (json.products || [])
-      .filter(p => p.product_name)
+      .filter(p => p.product_name_en || p.product_name)
       .map(p => ({
-        name:     p.product_name,
+        name:     p.product_name_en || p.product_name,
         calories: p.nutriments?.['energy-kcal_100g'] ?? null,
         protein:  p.nutriments?.proteins_100g ?? null,
         carbs:    p.nutriments?.carbohydrates_100g ?? null,
@@ -442,7 +442,7 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
   }
 
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`;
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_en,nutriments&lc=en`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
@@ -457,7 +457,7 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
 
     const p = json.product;
     res.json({
-      name:     p.product_name || 'Unknown product',
+      name:     p.product_name_en || p.product_name || 'Unknown product',
       calories: p.nutriments?.['energy-kcal_100g'] ?? null,
       protein:  p.nutriments?.proteins_100g ?? null,
       carbs:    p.nutriments?.carbohydrates_100g ?? null,
