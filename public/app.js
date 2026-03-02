@@ -303,7 +303,7 @@ const Auth = {
       }
     }
 
-    if (role === 'trainer') {
+    if (role === 'trainer' || role === 'admin') {
       const nav = document.querySelector('nav');
       if (nav) {
         const link = document.createElement('a');
