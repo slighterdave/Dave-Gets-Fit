@@ -335,6 +335,29 @@ test('login token includes role from database', async () => {
   assert.equal(payload.role, 'user');
 });
 
+// ── /api/user/me ──────────────────────────────────────────────────────────────
+test('/api/user/me requires authentication', async () => {
+  const { status } = await req('GET', '/api/user/me');
+  assert.equal(status, 401);
+});
+
+test('/api/user/me returns current role from database, not JWT', async () => {
+  // aliceToken was issued with role='user' (from 'setup: login alice').
+  // Now promote alice to admin in the DB to simulate an admin changing her role
+  // while she is already logged in with a stale token.
+  db.prepare("UPDATE users SET role = 'admin' WHERE username = 'alice'").run();
+
+  // The stale token still says role='user', but /api/user/me should return 'admin'
+  const { status, body } = await req('GET', '/api/user/me', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.role, 'admin');
+  assert.equal(body.username, 'alice');
+  assert.ok(body.userId);
+
+  // Leave alice as admin for subsequent admin-route tests
+});
+
+
 // ── Admin routes ──────────────────────────────────────────────────────────────
 let adminToken;
 let carolId;
