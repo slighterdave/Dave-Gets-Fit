@@ -579,8 +579,12 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
 
 // ── Start server ─────────────────────────────────────────────────────────────────
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`GetUs.Fit server running on http://localhost:${PORT}`);
+  });
+  server.on('error', (err) => {
+    console.error(`[GetUs.Fit] Failed to start server: ${err.message}`);
+    process.exit(1);
   });
 }
 
