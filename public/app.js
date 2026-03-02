@@ -159,5 +159,20 @@ const Auth = {
         }
       }
     }
+    if (role === 'trainer') {
+      const existingPlans = document.getElementById('nav-plans-link');
+      if (!existingPlans) {
+        const nav = document.querySelector('nav');
+        if (nav) {
+          const link = document.createElement('a');
+          link.id   = 'nav-plans-link';
+          link.href = 'trainer-plans.html';
+          link.textContent = '📋 Plans';
+          if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
+          const navUser = nav.querySelector('.nav-user');
+          nav.insertBefore(link, navUser || null);
+        }
+      }
+    }
   },
 };

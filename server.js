@@ -76,6 +76,22 @@ db.exec(`
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS plans (
+    id         TEXT    PRIMARY KEY,
+    trainer_id INTEGER NOT NULL,
+    name       TEXT    NOT NULL,
+    data       TEXT    NOT NULL,
+    FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS plan_assignments (
+    plan_id  TEXT    NOT NULL,
+    user_id  INTEGER NOT NULL,
+    PRIMARY KEY (plan_id, user_id),
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: add role column to databases created before this feature
@@ -106,6 +122,16 @@ const stmts = {
   removeAssignment: db.prepare('DELETE FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
   getAssignedUsers: db.prepare('SELECT u.id, u.username, u.role FROM users u JOIN trainer_assignments ta ON ta.user_id = u.id WHERE ta.trainer_id = ? ORDER BY u.username COLLATE NOCASE'),
   isAssigned:       db.prepare('SELECT 1 FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
+  // Plans
+  getTrainerPlans:    db.prepare('SELECT id, data FROM plans WHERE trainer_id = ? ORDER BY rowid'),
+  insertPlan:         db.prepare('INSERT INTO plans (id, trainer_id, name, data) VALUES (?, ?, ?, ?)'),
+  updatePlan:         db.prepare('UPDATE plans SET name = ?, data = ? WHERE id = ? AND trainer_id = ?'),
+  deletePlan:         db.prepare('DELETE FROM plans WHERE id = ? AND trainer_id = ?'),
+  getPlanById:        db.prepare('SELECT id, trainer_id, data FROM plans WHERE id = ?'),
+  assignPlan:         db.prepare('INSERT OR IGNORE INTO plan_assignments (plan_id, user_id) VALUES (?, ?)'),
+  unassignPlan:       db.prepare('DELETE FROM plan_assignments WHERE plan_id = ? AND user_id = ?'),
+  getPlanAssignments: db.prepare('SELECT u.id, u.username FROM users u JOIN plan_assignments pa ON pa.user_id = u.id WHERE pa.plan_id = ? ORDER BY u.username COLLATE NOCASE'),
+  getUserPlans:       db.prepare('SELECT p.id, p.data FROM plans p JOIN plan_assignments pa ON pa.plan_id = p.id WHERE pa.user_id = ? ORDER BY p.rowid'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -432,6 +458,86 @@ app.get('/api/trainer/users/:id/weights', requireAuth, requireTrainer, trainerCa
 app.get('/api/trainer/users/:id/calories', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
   const rows = stmts.getCalories.all(req.targetUserId);
   res.json(rows.map(r => ({ ...JSON.parse(r.data), id: r.id })));
+});
+
+// ── Trainer plan routes ───────────────────────────────────────────────────────
+app.get('/api/trainer/plans', requireAuth, requireTrainer, (req, res) => {
+  const rows = stmts.getTrainerPlans.all(req.user.userId);
+  res.json(rows.map(r => JSON.parse(r.data)));
+});
+
+app.post('/api/trainer/plans', requireAuth, requireTrainer, (req, res) => {
+  const plan = req.body;
+  if (!plan || !plan.name || !Array.isArray(plan.exercises)) {
+    return res.status(400).json({ error: 'Plan name and exercises are required.' });
+  }
+  const id = crypto.randomUUID();
+  plan.id = id;
+  plan.trainerId = req.user.userId;
+  stmts.insertPlan.run(id, req.user.userId, plan.name, JSON.stringify(plan));
+  res.status(201).json({ ok: true, id });
+});
+
+app.put('/api/trainer/plans/:id', requireAuth, requireTrainer, (req, res) => {
+  const plan = req.body;
+  if (!plan || !plan.name || !Array.isArray(plan.exercises)) {
+    return res.status(400).json({ error: 'Plan name and exercises are required.' });
+  }
+  plan.id = req.params.id;
+  plan.trainerId = req.user.userId;
+  const info = stmts.updatePlan.run(plan.name, JSON.stringify(plan), req.params.id, req.user.userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Plan not found.' });
+  res.json({ ok: true });
+});
+
+app.delete('/api/trainer/plans/:id', requireAuth, requireTrainer, (req, res) => {
+  const info = stmts.deletePlan.run(req.params.id, req.user.userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Plan not found.' });
+  res.json({ ok: true });
+});
+
+app.get('/api/trainer/plans/:id/assignments', requireAuth, requireTrainer, (req, res) => {
+  const plan = stmts.getPlanById.get(req.params.id);
+  if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  if (req.user.role !== 'admin' && plan.trainer_id !== req.user.userId) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  res.json(stmts.getPlanAssignments.all(req.params.id));
+});
+
+app.post('/api/trainer/plans/:id/assign', requireAuth, requireTrainer, (req, res) => {
+  const plan = stmts.getPlanById.get(req.params.id);
+  if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  if (req.user.role !== 'admin' && plan.trainer_id !== req.user.userId) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required.' });
+  if (!stmts.getUserById.get(userId)) return res.status(404).json({ error: 'User not found.' });
+  if (req.user.role !== 'admin' && !stmts.isAssigned.get(req.user.userId, userId)) {
+    return res.status(403).json({ error: 'User not assigned to you.' });
+  }
+  stmts.assignPlan.run(req.params.id, userId);
+  res.status(201).json({ ok: true });
+});
+
+app.delete('/api/trainer/plans/:id/assign/:userId', requireAuth, requireTrainer, (req, res) => {
+  const plan = stmts.getPlanById.get(req.params.id);
+  if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  if (req.user.role !== 'admin' && plan.trainer_id !== req.user.userId) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isFinite(userId)) return res.status(400).json({ error: 'Invalid user id.' });
+  const info = stmts.unassignPlan.run(req.params.id, userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Assignment not found.' });
+  res.json({ ok: true });
+});
+
+// ── User plans route ──────────────────────────────────────────────────────────
+app.get('/api/user/plans', requireAuth, (req, res) => {
+  const rows = stmts.getUserPlans.all(req.user.userId);
+  res.json(rows.map(r => JSON.parse(r.data)));
 });
 
 // ── Barcode lookup ────────────────────────────────────────────────────────────
