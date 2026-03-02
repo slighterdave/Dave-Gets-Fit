@@ -45,9 +45,14 @@
 
     #trainer-section { display: none; }
 
-    .tab-bar { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid #2a2a2a; }
-    .tab { padding: 10px 22px; background: none; border: none; color: #888; font-size: 0.92rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tab-bar { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid #2a2a2a; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tab { padding: 10px 22px; background: none; border: none; color: #888; font-size: 0.92rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; flex-shrink: 0; }
     .tab.active { color: #cc1a1a; border-bottom-color: #cc1a1a; }
+
+    @media (max-width: 600px) {
+      .tab { padding: 8px 14px; font-size: 0.8rem; }
+      .users-table { min-width: 560px; }
+    }
   </style>
 </head>
 <body>
@@ -112,19 +117,21 @@
         <div id="create-user-error" style="color:#e55;font-size:0.85rem;margin-top:10px;"></div>
       </div>
 
-      <table class="users-table" id="users-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Username</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="users-tbody">
-          <tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="users-table" id="users-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="4" style="color:#888;text-align:center;padding:20px;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Edit user inline form (hidden by default) -->
       <div id="edit-user-form" style="display:none;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px;margin-top:16px;">
