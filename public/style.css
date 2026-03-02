@@ -131,6 +131,11 @@ h3 {
   margin-bottom: 24px;
 }
 
+.card h2 {
+  color: #cc1a1a;
+  margin-bottom: 16px;
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 18px;
@@ -269,6 +274,10 @@ h3 {
 }
 
 /* Table */
+.table-scroll {
+  width: 100%;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -470,11 +479,27 @@ tbody tr:hover {
 
   main {
     padding: 0 14px;
-    margin: 24px auto;
+    margin: 16px auto;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    margin-bottom: 16px;
   }
 
   .card {
-    padding: 20px 16px;
+    padding: 16px 14px;
+    margin-bottom: 16px;
+  }
+
+  .card h2 {
+    margin-bottom: 12px;
+    font-size: 1rem;
   }
 
   .hero {
@@ -494,12 +519,14 @@ tbody tr:hover {
     height: 96px;
   }
 
-  h1 {
-    font-size: 1.6rem;
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   table {
     font-size: 0.82rem;
+    min-width: 480px;
   }
 
   thead th,
