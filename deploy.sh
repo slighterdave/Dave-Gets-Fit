@@ -18,6 +18,7 @@ set -euo pipefail
 # ── Configuration ─────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/slighterdave/Dave-Gets-Fit.git"
 APP_DIR="/var/www/getus-fit"
+DATA_DIR="/var/lib/getus-fit"
 APP_USER="ubuntu"
 NGINX_SITE="getus-fit"
 NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE}"
@@ -73,6 +74,26 @@ fi
 echo "==> Installing Node.js dependencies..."
 sudo -u ${APP_USER} npm --prefix "${APP_DIR}" ci --omit=dev
 
+echo "==> Setting up data directory (${DATA_DIR})..."
+mkdir -p "${DATA_DIR}"
+chown ${APP_USER}:${APP_USER} "${DATA_DIR}"
+chmod 750 "${DATA_DIR}"
+
+# Migrate existing database and JWT secret from the old in-repo location, if present.
+if [[ -f "${APP_DIR}/data.db" && ! -f "${DATA_DIR}/data.db" ]]; then
+  echo "    Migrating data.db to ${DATA_DIR}..."
+  mv "${APP_DIR}/data.db"     "${DATA_DIR}/data.db"
+  [[ -f "${APP_DIR}/data.db-wal" ]] && mv "${APP_DIR}/data.db-wal" "${DATA_DIR}/data.db-wal" || true
+  [[ -f "${APP_DIR}/data.db-shm" ]] && mv "${APP_DIR}/data.db-shm" "${DATA_DIR}/data.db-shm" || true
+  chown ${APP_USER}:${APP_USER} "${DATA_DIR}"/data.db*
+fi
+if [[ -f "${APP_DIR}/.jwt_secret" && ! -f "${DATA_DIR}/.jwt_secret" ]]; then
+  echo "    Migrating .jwt_secret to ${DATA_DIR}..."
+  mv "${APP_DIR}/.jwt_secret" "${DATA_DIR}/.jwt_secret"
+  chown ${APP_USER}:${APP_USER} "${DATA_DIR}/.jwt_secret"
+  chmod 600 "${DATA_DIR}/.jwt_secret"
+fi
+
 echo "==> Setting file permissions..."
 chown -R ${APP_USER}:${APP_USER} "${APP_DIR}"
 find "${APP_DIR}" -type d -exec chmod 755 {} +
@@ -94,7 +115,8 @@ Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=${NODE_PORT}
-Environment=DB_PATH=${APP_DIR}/data.db
+Environment=DATA_DIR=${DATA_DIR}
+Environment=DB_PATH=${DATA_DIR}/data.db
 
 [Install]
 WantedBy=multi-user.target

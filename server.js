@@ -10,9 +10,10 @@ const crypto      = require('crypto');
 const fs          = require('fs');
 
 // ── Configuration ──────────────────────────────────────────────────────────────
-const PORT       = parseInt(process.env.PORT || '3000', 10);
-const DB_PATH    = process.env.DB_PATH    || path.join(__dirname, 'data.db');
-const SECRET_FILE = path.join(__dirname, '.jwt_secret');
+const PORT     = parseInt(process.env.PORT || '3000', 10);
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, 'data.db');
+const SECRET_FILE = path.join(DATA_DIR, '.jwt_secret');
 
 function loadOrCreateSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
@@ -26,6 +27,7 @@ const BCRYPT_ROUNDS = 10;
 const VALID_ROLES   = ['admin', 'user', 'trainer'];
 
 // ── Database setup ─────────────────────────────────────────────────────────────
+console.log(`[GetUs.Fit] Database: ${DB_PATH}`);
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
