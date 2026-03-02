@@ -392,8 +392,13 @@ tbody tr:hover {
 }
 
 .feature-card .icon {
-  font-size: 2rem;
   margin-bottom: 10px;
+}
+
+.feature-card .feature-icon {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
 }
 
 .feature-card h3 {
@@ -482,6 +487,10 @@ tbody tr:hover {
 
   .feature-card {
     padding: 18px 16px;
+  }
+
+  .feature-card .feature-icon {
+    height: 64px;
   }
 
   h1 {
