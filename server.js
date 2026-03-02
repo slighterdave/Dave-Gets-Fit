@@ -119,6 +119,7 @@ const stmts = {
   listUsers:        db.prepare('SELECT id, username, role FROM users ORDER BY username COLLATE NOCASE'),
   getUserById:      db.prepare('SELECT id, username, role FROM users WHERE id = ?'),
   updateUserRole:   db.prepare('UPDATE users SET role = ? WHERE id = ?'),
+  updateUsername:   db.prepare('UPDATE users SET username = ? WHERE id = ?'),
   deleteUser:       db.prepare('DELETE FROM users WHERE id = ?'),
   assignTrainer:    db.prepare('INSERT OR IGNORE INTO trainer_assignments (trainer_id, user_id) VALUES (?, ?)'),
   removeAssignment: db.prepare('DELETE FROM trainer_assignments WHERE trainer_id = ? AND user_id = ?'),
@@ -383,14 +384,26 @@ app.put('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid user id.' });
 
-  const { role, password } = req.body || {};
+  const { username, role, password } = req.body || {};
+
+  if (!stmts.getUserById.get(id)) return res.status(404).json({ error: 'User not found.' });
+
+  if (username !== undefined) {
+    if (!/^[a-zA-Z0-9_]{2,30}$/.test(username)) {
+      return res.status(400).json({ error: 'Username must be 2–30 characters (letters, numbers, underscores).' });
+    }
+    const existing = stmts.findUser.get(username);
+    if (existing && existing.id !== id) {
+      return res.status(409).json({ error: 'Username already taken.' });
+    }
+    stmts.updateUsername.run(username, id);
+  }
 
   if (role !== undefined) {
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
     }
-    const info = stmts.updateUserRole.run(role, id);
-    if (info.changes === 0) return res.status(404).json({ error: 'User not found.' });
+    stmts.updateUserRole.run(role, id);
   }
 
   if (password !== undefined) {
@@ -434,6 +447,16 @@ app.delete('/api/admin/assignments/:trainerId/:userId', requireAuth, requireAdmi
   const info = stmts.removeAssignment.run(trainerId, userId);
   if (info.changes === 0) return res.status(404).json({ error: 'Assignment not found.' });
   res.json({ ok: true });
+});
+
+app.get('/api/admin/assignments/:trainerId', requireAuth, requireAdmin, (req, res) => {
+  const trainerId = parseInt(req.params.trainerId, 10);
+  if (!Number.isFinite(trainerId)) return res.status(400).json({ error: 'Invalid trainer id.' });
+  const trainer = stmts.getUserById.get(trainerId);
+  if (!trainer || trainer.role !== 'trainer') {
+    return res.status(400).json({ error: 'Specified user is not a trainer.' });
+  }
+  res.json(stmts.getAssignedUsers.all(trainerId));
 });
 
 // ── Trainer routes ────────────────────────────────────────────────────────────
