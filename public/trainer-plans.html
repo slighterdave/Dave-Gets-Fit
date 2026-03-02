@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GetUs.Fit – Trainer Plans</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .plan-block {
+      border: 1px solid #2e2e2e;
+      border-radius: 3px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .plan-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #111;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .plan-header:hover { background: #1a1a1a; }
+    .plan-title {
+      font-weight: 700;
+      color: #cc1a1a;
+      font-size: 0.95rem;
+      flex: 1;
+    }
+    .plan-meta { color: #777; font-size: 0.85rem; letter-spacing: 0.02em; text-transform: none; }
+    .plan-toggle { color: #555; font-size: 0.75rem; margin-left: auto; }
+    .plan-body {
+      display: none;
+      padding: 16px;
+      background: #0f0f0f;
+    }
+    .plan-body.open { display: block; }
+    .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+    .btn-xs { padding: 4px 10px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; letter-spacing: 0.05em; text-transform: uppercase; }
+    .btn-xs.edit   { background: #1a4a7c; color: #cdf; }
+    .btn-xs.danger { background: #7c1a1a; color: #fdd; }
+    .btn-xs.assign { background: #2a5a2a; color: #cfc; }
+
+    .assign-section { margin-top: 14px; border-top: 1px solid #2a2a2a; padding-top: 12px; }
+    .assign-section h4 { color: #888; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+
+    .assigned-list { margin-top: 6px; }
+    .assigned-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid #2a2a2a; gap: 12px;
+    }
+    .assigned-item:last-child { border-bottom: none; }
+    .assigned-item span { color: #ccc; font-size: 0.9rem; }
+
+    .assign-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .assign-row select { flex: 1; min-width: 160px; background: #111; color: #d4d4d4; border: 1px solid #3a3a3a; border-radius: 3px; padding: 8px 10px; font-size: 0.9rem; font-family: inherit; }
+
+    #plan-editor { display: none; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    #plan-editor h3 { margin: 0 0 16px; font-size: 1rem; color: #cc1a1a; }
+    .editor-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html">Weight</a>
+    <a href="calories.html">Calories</a>
+  </div>
+  <div class="nav-user">
+    <a class="nav-username" id="nav-username-display" href="profile.html"></a>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+  <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+</nav>
+
+<main>
+  <h1>Workout Plans</h1>
+  <p class="subtitle">Create and assign workout plans to your athletes.</p>
+
+  <!-- ── Plan Editor ─────────────────────────────────────────────────────── -->
+  <div id="plan-editor">
+    <h3 id="editor-title">Create New Plan</h3>
+    <input type="hidden" id="editing-plan-id" value="" />
+    <div class="form-group">
+      <label for="plan-name">Plan Name</label>
+      <input type="text" id="plan-name" placeholder="e.g. Beginner Strength Phase 1" />
+    </div>
+    <div class="form-group">
+      <label for="plan-description">Description (optional)</label>
+      <input type="text" id="plan-description" placeholder="Brief description of this plan" />
+    </div>
+
+    <div id="plan-exercise-list"></div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="btn btn-secondary" id="add-plan-exercise-btn">+ Add Exercise</button>
+    </div>
+
+    <div id="plan-editor-error" style="color:#e55;font-size:0.85rem;margin-top:10px;min-height:1.2em;"></div>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" id="save-plan-btn">Save Plan</button>
+      <button class="btn btn-secondary" id="cancel-plan-btn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ── Plans List ──────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      <h2>My Plans</h2>
+      <button class="btn btn-primary btn-xs" id="new-plan-btn" style="padding:8px 18px;">+ New Plan</button>
+    </div>
+
+    <div class="empty-state" id="plans-empty" style="display:none;">No plans yet. Create your first one above!</div>
+    <div id="plans-list"></div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  const role = Auth.role();
+  if (role !== 'trainer' && role !== 'admin') {
+    window.location.href = 'index.html';
+  }
+
+  let allAthletes = [];
+  let plansData   = [];
+  let planExerciseRowCount = 0;
+
+  // ── Load athletes assigned to this trainer ──────────────────────────────
+  async function loadAthletes() {
+    allAthletes = await API.get('/trainer/users').catch(() => []);
+  }
+
+  // ── Exercise row builder for plan editor ───────────────────────────────
+  function addPlanExerciseRow(name = '', sets = '', reps = '', weightKg = '', notes = '') {
+    planExerciseRowCount++;
+    const id = planExerciseRowCount;
+    const container = document.getElementById('plan-exercise-list');
+    const div = document.createElement('div');
+    div.className = 'exercise-row';
+    div.dataset.rowId = id;
+    div.innerHTML = `
+      <div class="exercise-row-fields">
+        <div class="form-group" style="flex:2;">
+          <label>Exercise</label>
+          <input type="text" class="ex-name" placeholder="e.g. Bench Press" value="${escHtml(name)}" />
+        </div>
+        <div class="form-group">
+          <label>Sets</label>
+          <input type="number" class="ex-sets" placeholder="3" min="1" value="${escHtml(sets)}" />
+        </div>
+        <div class="form-group">
+          <label>Reps</label>
+          <input type="number" class="ex-reps" placeholder="10" min="1" value="${escHtml(reps)}" />
+        </div>
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" class="ex-weight" placeholder="60" min="0" step="0.5" value="${escHtml(weightKg)}" />
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label>Notes</label>
+          <input type="text" class="ex-notes" placeholder="Optional cues" value="${escHtml(notes)}" />
+        </div>
+        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">✕</button>
+      </div>
+    `;
+    div.querySelector('.btn-remove-exercise').addEventListener('click', () => {
+      div.remove();
+      if (document.querySelectorAll('#plan-exercise-list .exercise-row').length === 0) addPlanExerciseRow();
+    });
+    container.appendChild(div);
+  }
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  document.getElementById('add-plan-exercise-btn').addEventListener('click', () => addPlanExerciseRow());
+
+  // ── Show / hide editor ──────────────────────────────────────────────────
+  function showEditor(plan = null) {
+    const editor = document.getElementById('plan-editor');
+    const errEl  = document.getElementById('plan-editor-error');
+    errEl.textContent = '';
+    editor.style.display = '';
+
+    document.getElementById('editing-plan-id').value = plan ? plan.id : '';
+    document.getElementById('editor-title').textContent = plan ? 'Edit Plan' : 'Create New Plan';
+    document.getElementById('plan-name').value = plan ? plan.name : '';
+    document.getElementById('plan-description').value = plan ? (plan.description || '') : '';
+
+    const list = document.getElementById('plan-exercise-list');
+    list.innerHTML = '';
+    planExerciseRowCount = 0;
+
+    if (plan && plan.exercises && plan.exercises.length) {
+      plan.exercises.forEach(e => addPlanExerciseRow(e.name, e.sets, e.reps, e.weightKg, e.notes));
+    } else {
+      addPlanExerciseRow();
+    }
+
+    document.getElementById('plan-name').focus();
+    editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function hideEditor() {
+    document.getElementById('plan-editor').style.display = 'none';
+    document.getElementById('plan-editor-error').textContent = '';
+  }
+
+  document.getElementById('new-plan-btn').addEventListener('click', () => showEditor());
+  document.getElementById('cancel-plan-btn').addEventListener('click', hideEditor);
+
+  // ── Save plan ───────────────────────────────────────────────────────────
+  document.getElementById('save-plan-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('plan-editor-error');
+    errEl.textContent = '';
+
+    const name        = document.getElementById('plan-name').value.trim();
+    const description = document.getElementById('plan-description').value.trim();
+    const editingId   = document.getElementById('editing-plan-id').value;
+
+    if (!name) { errEl.textContent = 'Plan name is required.'; return; }
+
+    const rows = document.querySelectorAll('#plan-exercise-list .exercise-row');
+    const exercises = [];
+    let valid = true;
+    rows.forEach(row => {
+      const exName = row.querySelector('.ex-name').value.trim();
+      if (!exName) { valid = false; return; }
+      exercises.push({
+        name:     exName,
+        sets:     row.querySelector('.ex-sets').value,
+        reps:     row.querySelector('.ex-reps').value,
+        weightKg: row.querySelector('.ex-weight').value,
+        notes:    row.querySelector('.ex-notes').value.trim(),
+      });
+    });
+
+    if (!valid || exercises.length === 0) {
+      errEl.textContent = 'Please give every exercise a name, or add at least one exercise.';
+      return;
+    }
+
+    try {
+      if (editingId) {
+        await API.put(`/trainer/plans/${editingId}`, { name, description, exercises });
+      } else {
+        await API.post('/trainer/plans', { name, description, exercises });
+      }
+      hideEditor();
+      await render();
+    } catch (e) {
+      errEl.textContent = e.message;
+    }
+  });
+
+  // ── Render plans list ───────────────────────────────────────────────────
+  async function render() {
+    plansData = await API.get('/trainer/plans').catch(() => []);
+    const container  = document.getElementById('plans-list');
+    const emptyState = document.getElementById('plans-empty');
+    container.innerHTML = '';
+
+    if (plansData.length === 0) {
+      emptyState.style.display = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    for (const plan of plansData) {
+      const blockId = 'plan-' + plan.id;
+      const div = document.createElement('div');
+      div.className = 'plan-block';
+      div.innerHTML = `
+        <div class="plan-header" data-target="${blockId}">
+          <span class="plan-title">${escHtml(plan.name)}</span>
+          <span class="plan-meta">${plan.exercises.length} exercise${plan.exercises.length !== 1 ? 's' : ''}${plan.description ? ' · ' + escHtml(plan.description) : ''}</span>
+          <span class="plan-toggle">▼</span>
+        </div>
+        <div class="plan-body" id="${blockId}">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th><th>Notes</th></tr>
+              </thead>
+              <tbody>
+                ${plan.exercises.map(e => `
+                  <tr>
+                    <td><strong>${escHtml(e.name)}</strong></td>
+                    <td>${escHtml(e.sets) || '—'}</td>
+                    <td>${escHtml(e.reps) || '—'}</td>
+                    <td>${parseFloat(e.weightKg) > 0 ? parseFloat(e.weightKg).toFixed(1) : '—'}</td>
+                    <td>${escHtml(e.notes) || '—'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="plan-actions">
+            <button class="btn-xs edit btn-edit-plan" data-id="${plan.id}">✏ Edit</button>
+            <button class="btn-xs danger btn-delete-plan" data-id="${plan.id}">🗑 Delete</button>
+          </div>
+          <div class="assign-section">
+            <h4>Assigned Athletes</h4>
+            <div class="assigned-list" id="assigned-${plan.id}">Loading…</div>
+            <div class="assign-row">
+              <select class="athlete-select" data-plan-id="${plan.id}">
+                <option value="">Select athlete to assign…</option>
+                ${allAthletes.map(u => `<option value="${u.id}">${escHtml(u.username)}</option>`).join('')}
+              </select>
+              <button class="btn-xs assign btn-assign-plan" data-plan-id="${plan.id}" style="padding:7px 14px;">Assign</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Toggle collapse
+      div.querySelector('.plan-header').addEventListener('click', async function () {
+        const body = document.getElementById(this.dataset.target);
+        const isOpen = body.classList.toggle('open');
+        this.querySelector('.plan-toggle').textContent = isOpen ? '▲' : '▼';
+        if (isOpen) await loadPlanAssignments(plan.id);
+      });
+
+      // Edit button
+      div.querySelector('.btn-edit-plan').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = plansData.find(pl => pl.id === plan.id);
+        showEditor(p);
+      });
+
+      // Delete button
+      div.querySelector('.btn-delete-plan').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete plan "${plan.name}"? This cannot be undone.`)) return;
+        try {
+          await API.del(`/trainer/plans/${plan.id}`);
+          await render();
+        } catch (err) { alert(err.message); }
+      });
+
+      // Assign button
+      div.querySelector('.btn-assign-plan').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const sel    = div.querySelector(`.athlete-select[data-plan-id="${plan.id}"]`);
+        const userId = parseInt(sel.value);
+        if (!userId) { alert('Please select an athlete to assign.'); return; }
+        try {
+          await API.post(`/trainer/plans/${plan.id}/assign`, { userId });
+          sel.value = '';
+          await loadPlanAssignments(plan.id);
+        } catch (err) { alert(err.message); }
+      });
+
+      container.appendChild(div);
+    }
+  }
+
+  // ── Load assignments for a plan ─────────────────────────────────────────
+  async function loadPlanAssignments(planId) {
+    const container = document.getElementById(`assigned-${planId}`);
+    if (!container) return;
+    try {
+      const users = await API.get(`/trainer/plans/${planId}/assignments`);
+      if (users.length === 0) {
+        container.innerHTML = '<p style="color:#666;font-size:0.85rem;margin:0;">No athletes assigned yet.</p>';
+        return;
+      }
+      container.innerHTML = users.map(u => `
+        <div class="assigned-item">
+          <span>${escHtml(u.username)}</span>
+          <button class="btn-xs danger btn-unassign" data-plan-id="${planId}" data-user-id="${u.id}" style="padding:3px 8px;">Remove</button>
+        </div>
+      `).join('');
+      container.querySelectorAll('.btn-unassign').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await API.del(`/trainer/plans/${btn.dataset.planId}/assign/${btn.dataset.userId}`);
+            await loadPlanAssignments(planId);
+          } catch (err) { alert(err.message); }
+        });
+      });
+    } catch (e) {
+      container.innerHTML = `<p style="color:#e55;font-size:0.85rem;margin:0;">${e.message}</p>`;
+    }
+  }
+
+  // ── Boot ────────────────────────────────────────────────────────────────
+  (async () => {
+    await loadAthletes();
+    await render();
+  })();
+</script>
+</body>
+</html>
