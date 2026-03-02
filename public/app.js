@@ -283,6 +283,40 @@ const Auth = {
     window.location.href = 'login.html';
   },
 
+  /** Inject/refresh role-based nav links based on the given role string */
+  _injectNavLinks(role) {
+    ['nav-admin-link', 'nav-plans-link'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+
+    if (role === 'admin' || role === 'trainer') {
+      const nav = document.querySelector('nav');
+      if (nav) {
+        const link = document.createElement('a');
+        link.id   = 'nav-admin-link';
+        link.href = 'admin.html';
+        link.textContent = role === 'admin' ? '⚙ Admin' : '👥 My Athletes';
+        if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
+        const navUser = nav.querySelector('.nav-user');
+        nav.insertBefore(link, navUser || null);
+      }
+    }
+
+    if (role === 'trainer') {
+      const nav = document.querySelector('nav');
+      if (nav) {
+        const link = document.createElement('a');
+        link.id   = 'nav-plans-link';
+        link.href = 'trainer-plans.html';
+        link.textContent = '📋 Plans';
+        if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
+        const navUser = nav.querySelector('.nav-user');
+        nav.insertBefore(link, navUser || null);
+      }
+    }
+  },
+
   /** Redirect to login.html if no active session; also populates the nav username badge */
   requireAuth() {
     if (!this.currentUser()) {
@@ -302,38 +336,13 @@ const Auth = {
       });
     }
 
-    // Inject Admin link for admin/trainer roles
-    const role = this.role();
-    if (role === 'admin' || role === 'trainer') {
-      const existing = document.getElementById('nav-admin-link');
-      if (!existing) {
-        const nav = document.querySelector('nav');
-        if (nav) {
-          const link = document.createElement('a');
-          link.id   = 'nav-admin-link';
-          link.href = 'admin.html';
-          link.textContent = role === 'admin' ? '⚙ Admin' : '👥 My Athletes';
-          if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
-          // Insert before the nav-user div
-          const navUser = nav.querySelector('.nav-user');
-          nav.insertBefore(link, navUser || null);
-        }
+    // Inject nav links based on JWT role initially, then refresh from server
+    // to pick up any role changes made since the token was issued.
+    this._injectNavLinks(this.role());
+    API.get('/user/me').then(me => {
+      if (me.role !== this.role()) {
+        this._injectNavLinks(me.role);
       }
-    }
-    if (role === 'trainer') {
-      const existingPlans = document.getElementById('nav-plans-link');
-      if (!existingPlans) {
-        const nav = document.querySelector('nav');
-        if (nav) {
-          const link = document.createElement('a');
-          link.id   = 'nav-plans-link';
-          link.href = 'trainer-plans.html';
-          link.textContent = '📋 Plans';
-          if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
-          const navUser = nav.querySelector('.nav-user');
-          nav.insertBefore(link, navUser || null);
-        }
-      }
-    }
+    }).catch(err => console.warn('Could not refresh role from server:', err.message));
   },
 };

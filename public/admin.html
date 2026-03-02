@@ -180,20 +180,40 @@
 <script>
   Auth.requireAuth();
 
-  const role = Auth.role();
+  // Hide all panels until the server confirms the current role, to avoid
+  // a flash or incorrect redirect when the JWT role is stale.
+  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('trainer-panel').style.display = 'none';
 
-  // Show correct panel
-  if (role === 'admin') {
-    document.getElementById('admin-panel').style.display = '';
-    document.getElementById('trainer-panel').style.display = 'none';
-    document.getElementById('panel-role-badge').innerHTML = '<span class="role-badge admin">Admin</span>';
-  } else if (role === 'trainer') {
-    document.getElementById('admin-panel').style.display = 'none';
-    document.getElementById('trainer-panel').style.display = '';
-  } else {
-    // Regular users shouldn't land here
-    window.location.href = 'index.html';
+  async function initAdminPage() {
+    let role;
+    try {
+      const me = await API.get('/user/me');
+      role = me.role;
+    } catch (err) {
+      console.warn('Could not refresh role from server:', err.message);
+      role = Auth.role();
+    }
+
+    // Show correct panel
+    if (role === 'admin') {
+      document.getElementById('admin-panel').style.display = '';
+      document.getElementById('trainer-panel').style.display = 'none';
+      document.getElementById('panel-role-badge').innerHTML = '<span class="role-badge admin">Admin</span>';
+    } else if (role === 'trainer') {
+      document.getElementById('admin-panel').style.display = 'none';
+      document.getElementById('trainer-panel').style.display = '';
+    } else {
+      // Regular users shouldn't land here
+      window.location.href = 'index.html';
+      return;
+    }
+
+    if (role === 'admin') loadUsers();
+    if (role === 'trainer') loadTrainerView();
   }
+
+  initAdminPage();
 
   // ── Tab switching ──────────────────────────────────────────────────────────
   document.querySelectorAll('.tab').forEach(btn => {
@@ -390,10 +410,6 @@
         <td><span class="role-badge user">user</span></td>
       </tr>`).join('');
   }
-
-  // Boot
-  if (role === 'admin') loadUsers();
-  if (role === 'trainer') loadTrainerView();
 </script>
 </body>
 </html>

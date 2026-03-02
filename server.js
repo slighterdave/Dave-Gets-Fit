@@ -233,6 +233,13 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token });
 });
 
+// ── Current user info ───────────────────────────────────────────────────────────
+app.get('/api/user/me', requireAuth, (req, res) => {
+  const user = stmts.getUserById.get(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  res.json({ userId: user.id, username: user.username, role: user.role });
+});
+
 // ── Profile routes ──────────────────────────────────────────────────────────────
 app.get('/api/profile', requireAuth, (req, res) => {
   const row = stmts.getProfile.get(req.user.userId);
