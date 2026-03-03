@@ -305,6 +305,16 @@
     drawChart(await getSessions());
   });
 
+  /* ── Total volume helper ───────────────────────────── */
+  function calcTotalVolume(exercises) {
+    return exercises.reduce((sum, e) => {
+      const w = parseFloat(e.weightKg) || 0;
+      const r = parseInt(e.reps, 10) || 0;
+      const s = parseInt(e.sets, 10) || 0;
+      return sum + w * r * s;
+    }, 0);
+  }
+
   /* ── History ───────────────────────────────────────── */
   function renderHistory(sessions) {
     const emptyMsg = document.getElementById('empty-msg');
@@ -319,30 +329,35 @@
 
     [...sessions].reverse().forEach((session) => {
       const blockId = 'session-' + session.id;
+      const totalVolume = calcTotalVolume(session.exercises);
+      const volStr = totalVolume > 0 ? ` · ${totalVolume.toLocaleString()} kg moved` : '';
 
       const div = document.createElement('div');
       div.className = 'session-block';
       div.innerHTML = `
         <div class="session-header" data-target="${blockId}">
           <span class="session-date">${formatDate(session.date)}</span>
-          <span class="session-meta">${session.exercises.length} exercise${session.exercises.length !== 1 ? 's' : ''}${session.notes ? ' · ' + session.notes : ''}</span>
+          <span class="session-meta">${session.exercises.length} exercise${session.exercises.length !== 1 ? 's' : ''}${volStr}${session.notes ? ' · ' + session.notes : ''}</span>
           <span class="session-toggle">▼</span>
           <button class="btn btn-danger btn-delete-session" data-id="${session.id}">Delete</button>
         </div>
         <div class="session-body" id="${blockId}">
           <table>
             <thead>
-              <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th></tr>
+              <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th><th>Volume (kg)</th></tr>
             </thead>
             <tbody>
-              ${session.exercises.map(e => `
+              ${session.exercises.map(e => {
+                const vol = (parseFloat(e.weightKg) || 0) * (parseInt(e.reps, 10) || 0) * (parseInt(e.sets, 10) || 0);
+                return `
                 <tr>
                   <td><strong>${e.name}</strong></td>
                   <td>${e.sets || '—'}</td>
                   <td>${e.reps || '—'}</td>
                   <td>${parseFloat(e.weightKg) > 0 ? parseFloat(e.weightKg).toFixed(1) : '—'}</td>
-                </tr>
-              `).join('')}
+                  <td>${vol > 0 ? vol.toLocaleString() : '—'}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
           </table>
         </div>
