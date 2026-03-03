@@ -262,6 +262,34 @@ test('food search uses world Open Food Facts endpoint with UK country filter', a
   }
 });
 
+test('food search filters out products whose name does not contain the query', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      return {
+        ok: true,
+        json: async () => ({
+          products: [
+            { product_name_en: 'Apple Juice', nutriments: { 'energy-kcal_100g': 46 } },
+            { product_name_en: 'Green Apple', nutriments: { 'energy-kcal_100g': 52 } },
+            { product_name_en: 'Marmite Yeast Extract', nutriments: { 'energy-kcal_100g': 260 } },
+            { product_name_en: 'Intense Dark 70% Cocoa', nutriments: { 'energy-kcal_100g': 550 } },
+          ],
+        }),
+      };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
+    assert.equal(status, 200);
+    assert.equal(body.length, 2);
+    assert.ok(body.every(r => r.name.toLowerCase().includes('apple')), 'all results should contain the query in the name');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('reset user data deletes all fitness records', async () => {
   // Add some data
   await req('PUT', '/api/profile', { firstName: 'Alice' }, aliceToken);
