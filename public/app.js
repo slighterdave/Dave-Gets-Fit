@@ -198,6 +198,19 @@ const API = {
   post(path, body) { return this.request('POST',   path, body); },
   put(path, body)  { return this.request('PUT',    path, body); },
   del(path)        { return this.request('DELETE', path); },
+
+  /** Fetch without requiring authentication (used for public config endpoints) */
+  async getRaw(path) {
+    let res;
+    try {
+      res = await fetch(this.BASE + path, { headers: { 'Content-Type': 'application/json' } });
+    } catch {
+      throw new Error('Cannot reach the server.');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  },
 };
 
 /** Return today's date as YYYY-MM-DD */
@@ -271,6 +284,16 @@ const Auth = {
   async login(username, password) {
     try {
       const { token } = await API.post('/auth/login', { username, password });
+      sessionStorage.setItem(this.TOKEN_KEY, token);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  },
+
+  async loginWithGoogle(credential) {
+    try {
+      const { token } = await API.post('/auth/google', { credential });
       sessionStorage.setItem(this.TOKEN_KEY, token);
       return { ok: true };
     } catch (e) {
