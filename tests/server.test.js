@@ -87,6 +87,13 @@ test('login with unknown user returns 401', async () => {
   assert.equal(status, 401);
 });
 
+// ── Google auth config ────────────────────────────────────────────────────────
+test('GET /api/config returns googleClientId field', async () => {
+  const { status, body } = await req('GET', '/api/config');
+  assert.equal(status, 200);
+  assert.ok('googleClientId' in body, 'response should include googleClientId field');
+});
+
 // ── Profile ───────────────────────────────────────────────────────────────────
 test('get profile returns null when not set', async () => {
   const { body: loginBody } = await req('POST', '/api/auth/login', { username: 'alice', password: 'password123' });

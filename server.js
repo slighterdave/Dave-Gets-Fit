@@ -99,11 +99,17 @@ db.exec(`
 // Migration: add role column to databases created before this feature
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
 
+// Migration: add google_id column for social sign-in
+try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch {}
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL'); } catch {}
+
 // ── Prepared statements ─────────────────────────────────────────────────────────
 const stmts = {
-  findUser:       db.prepare('SELECT * FROM users WHERE username = ?'),
-  insertUser:     db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)'),
-  insertUserWithRole: db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)'),
+  findUser:            db.prepare('SELECT * FROM users WHERE username = ?'),
+  findUserByGoogleId:  db.prepare('SELECT * FROM users WHERE google_id = ?'),
+  insertUser:          db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)'),
+  insertUserWithRole:  db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)'),
+  insertGoogleUser:    db.prepare("INSERT INTO users (username, password_hash, google_id) VALUES (?, '!', ?)"),
   getProfile:     db.prepare('SELECT data FROM profiles WHERE user_id = ?'),
   upsertProfile:  db.prepare('INSERT INTO profiles (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data'),
   getWorkouts:    db.prepare('SELECT id, data FROM workouts WHERE user_id = ? ORDER BY date DESC'),
@@ -208,6 +214,68 @@ function trainerCanAccessUser(req, res, next) {
 }
 
 // ── Auth routes ─────────────────────────────────────────────────────────────────
+
+// Helper: verify a Google ID token via Google's tokeninfo endpoint.
+// For production deployments with high traffic, consider replacing this with
+// local verification using the 'google-auth-library' package to avoid the
+// round-trip to Google and potential rate limits on the tokeninfo endpoint.
+async function verifyGoogleToken(idToken) {
+  const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error('Failed to verify Google token');
+  const payload = await response.json();
+  if (payload.error_description) throw new Error(payload.error_description);
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (clientId && payload.aud !== clientId) throw new Error('Token not issued for this application');
+  if (!payload.sub) throw new Error('Invalid Google token payload');
+  return payload;
+}
+
+// Return public configuration (e.g. Google Client ID) for the frontend
+app.get('/api/config', (req, res) => {
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  const { credential } = req.body || {};
+  if (!credential) return res.status(400).json({ error: 'Google credential is required.' });
+
+  try {
+    const payload = await verifyGoogleToken(credential);
+    const googleId = payload.sub;
+
+    // Find existing user linked to this Google account
+    let user = stmts.findUserByGoogleId.get(googleId);
+
+    if (!user) {
+      // Derive a username from the Google email address
+      const emailPrefix = (payload.email || '').split('@')[0];
+      let baseUsername = emailPrefix.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28) || 'user';
+      if (baseUsername.length < 2) baseUsername = 'user';
+
+      // Ensure username is unique by appending a numeric suffix if necessary
+      let username = baseUsername;
+      let suffix = 1;
+      while (stmts.findUser.get(username) && suffix <= 9999) {
+        username = `${baseUsername.slice(0, 26)}_${suffix++}`;
+      }
+
+      const info = stmts.insertGoogleUser.run(username, googleId);
+      user = { id: info.lastInsertRowid, username, role: 'user' };
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, role: user.role || 'user' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ token });
+  } catch (err) {
+    console.error('Google auth error:', err.message || err);
+    res.status(401).json({ error: 'Google authentication failed.' });
+  }
+});
+
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
