@@ -285,10 +285,21 @@ const Auth = {
 
   /** Inject/refresh role-based nav links based on the given role string */
   _injectNavLinks(role) {
-    ['nav-admin-link', 'nav-plans-link'].forEach(id => {
+    ['nav-admin-link', 'nav-plans-link', 'nav-routines-link'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.remove();
     });
+
+    // My Routines link – visible to all authenticated users
+    const navLinks = document.getElementById('nav-links');
+    if (navLinks && !navLinks.querySelector('a[href="my-routines.html"]')) {
+      const routinesLink = document.createElement('a');
+      routinesLink.id = 'nav-routines-link';
+      routinesLink.href = 'my-routines.html';
+      routinesLink.textContent = 'My Routines';
+      if (window.location.pathname.endsWith('my-routines.html')) routinesLink.classList.add('active');
+      navLinks.appendChild(routinesLink);
+    }
 
     if (role === 'admin' || role === 'trainer') {
       const nav = document.querySelector('nav');
@@ -296,7 +307,7 @@ const Auth = {
         const link = document.createElement('a');
         link.id   = 'nav-admin-link';
         link.href = 'admin.html';
-        link.textContent = role === 'admin' ? '⚙ Admin' : '👥 My Athletes';
+        link.textContent = role === 'admin' ? 'Admin' : 'My Athletes';
         if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
         const navUser = nav.querySelector('.nav-user');
         nav.insertBefore(link, navUser || null);
@@ -309,7 +320,7 @@ const Auth = {
         const link = document.createElement('a');
         link.id   = 'nav-plans-link';
         link.href = 'trainer-plans.html';
-        link.textContent = '📋 Plans';
+        link.textContent = 'Plans';
         if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
         const navUser = nav.querySelector('.nav-user');
         nav.insertBefore(link, navUser || null);

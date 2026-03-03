@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GetUs.Fit – My Routines</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .routine-block {
+      border: 1px solid #2e2e2e;
+      border-radius: 3px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .routine-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #111;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .routine-header:hover { background: #1a1a1a; }
+    .routine-title {
+      font-weight: 700;
+      color: #cc1a1a;
+      font-size: 0.95rem;
+      flex: 1;
+    }
+    .routine-meta { color: #777; font-size: 0.85rem; letter-spacing: 0.02em; }
+    .routine-toggle { color: #555; font-size: 0.75rem; margin-left: auto; }
+    .routine-body {
+      display: none;
+      padding: 16px;
+      background: #0f0f0f;
+    }
+    .routine-body.open { display: block; }
+    .routine-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+    .btn-xs { padding: 4px 10px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; letter-spacing: 0.05em; text-transform: uppercase; }
+    .btn-xs.complete { background: #1a4a1a; color: #cfc; }
+
+    /* Completion editor */
+    #completion-editor {
+      display: none;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    #completion-editor h3 { margin: 0 0 4px; font-size: 1rem; color: #cc1a1a; }
+    #completion-editor .editor-hint {
+      color: #888;
+      font-size: 0.82rem;
+      margin-bottom: 16px;
+    }
+    .editor-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html">Weight</a>
+    <a href="calories.html">Calories</a>
+    <a href="my-routines.html" class="active">My Routines</a>
+  </div>
+  <div class="nav-user">
+    <a class="nav-username" id="nav-username-display" href="profile.html"></a>
+    <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+  </div>
+  <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+</nav>
+
+<main>
+  <h1>My Routines</h1>
+  <p class="subtitle">Workout plans assigned to you. Review and complete them to track your progress.</p>
+
+  <!-- ── Completion Editor ───────────────────────────────────────────────── -->
+  <div id="completion-editor">
+    <h3 id="editor-plan-name">Complete Plan</h3>
+    <p class="editor-hint">Review the exercises below. Edit, add, or remove anything before logging this workout.</p>
+    <input type="hidden" id="editor-plan-id" value="" />
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="completion-date">Date</label>
+        <input type="date" id="completion-date" required />
+      </div>
+      <div class="form-group">
+        <label for="completion-notes">Notes (optional)</label>
+        <input type="text" id="completion-notes" placeholder="e.g. Felt strong today" />
+      </div>
+    </div>
+
+    <div id="completion-exercise-list"></div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="btn btn-secondary" id="add-completion-exercise-btn">+ Add Exercise</button>
+    </div>
+
+    <div id="completion-error" style="color:#e55;font-size:0.85rem;margin-top:10px;min-height:1.2em;"></div>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" id="log-completion-btn">Log Workout</button>
+      <button class="btn btn-secondary" id="cancel-completion-btn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ── Routines List ───────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Assigned Plans</h2>
+    <div class="empty-state" id="routines-empty" style="display:none;">
+      No routines assigned yet. Ask your trainer to assign a plan!
+    </div>
+    <div id="routines-list"></div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  Auth.requireAuth();
+
+  let routinesData = [];
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Exercise row builder for completion editor ──────────────────────────
+  function addCompletionExerciseRow(name = '', sets = '', reps = '', weightKg = '', notes = '') {
+    const container = document.getElementById('completion-exercise-list');
+    const div = document.createElement('div');
+    div.className = 'exercise-row';
+    const groupOptions = Object.keys(EXERCISE_CATALOGUE)
+      .map(g => `<option value="${g}">${escHtml(g)}</option>`).join('');
+    div.innerHTML = `
+      <div class="exercise-row-fields">
+        <div class="form-group" style="flex:1.5;min-width:140px;">
+          <label>Muscle Group</label>
+          <select class="ex-group" aria-label="Muscle group">
+            <option value="">Select group\u2026</option>
+            ${groupOptions}
+            <option value="__custom__">\u2014 Custom \u2014</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:2;min-width:140px;">
+          <label>Exercise</label>
+          <select class="ex-select" aria-label="Exercise" style="display:none;"><option value="">Select exercise\u2026</option></select>
+          <input type="text" class="ex-name" aria-label="Exercise" placeholder="Select a group or type custom" value="" />
+        </div>
+        <div class="form-group">
+          <label>Sets</label>
+          <input type="number" class="ex-sets" placeholder="3" min="1" value="${escHtml(sets)}" />
+        </div>
+        <div class="form-group">
+          <label>Reps</label>
+          <input type="number" class="ex-reps" placeholder="10" min="1" value="${escHtml(reps)}" />
+        </div>
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" class="ex-weight" placeholder="60" min="0" step="0.5" value="${escHtml(weightKg)}" />
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label>Notes</label>
+          <input type="text" class="ex-notes" placeholder="Optional cues" value="${escHtml(notes)}" />
+        </div>
+        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">✕</button>
+      </div>
+    `;
+    setupExerciseRow(div, name);
+    div.querySelector('.btn-remove-exercise').addEventListener('click', () => {
+      div.remove();
+      if (document.querySelectorAll('#completion-exercise-list .exercise-row').length === 0) {
+        addCompletionExerciseRow();
+      }
+    });
+    container.appendChild(div);
+  }
+
+  document.getElementById('add-completion-exercise-btn').addEventListener('click', () => addCompletionExerciseRow());
+
+  // ── Open/close editor ───────────────────────────────────────────────────
+  function showCompletionEditor(plan) {
+    const editor = document.getElementById('completion-editor');
+    document.getElementById('editor-plan-name').textContent = 'Complete: ' + plan.name;
+    document.getElementById('editor-plan-id').value = plan.id;
+    document.getElementById('completion-date').value = today();
+    document.getElementById('completion-notes').value = '';
+    document.getElementById('completion-error').textContent = '';
+
+    const list = document.getElementById('completion-exercise-list');
+    list.innerHTML = '';
+
+    if (plan.exercises && plan.exercises.length) {
+      plan.exercises.forEach(e => addCompletionExerciseRow(e.name, e.sets, e.reps, e.weightKg, e.notes));
+    } else {
+      addCompletionExerciseRow();
+    }
+
+    editor.style.display = 'block';
+    editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function hideCompletionEditor() {
+    document.getElementById('completion-editor').style.display = 'none';
+    document.getElementById('completion-error').textContent = '';
+  }
+
+  document.getElementById('cancel-completion-btn').addEventListener('click', hideCompletionEditor);
+
+  // ── Log workout from completed plan ─────────────────────────────────────
+  document.getElementById('log-completion-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('completion-error');
+    errEl.textContent = '';
+
+    const date  = document.getElementById('completion-date').value;
+    const notes = document.getElementById('completion-notes').value.trim();
+
+    if (!date) { errEl.textContent = 'Please pick a date.'; return; }
+
+    const rows = document.querySelectorAll('#completion-exercise-list .exercise-row');
+    const exercises = [];
+    let valid = true;
+    rows.forEach(row => {
+      const name = getExerciseName(row);
+      if (!name) { valid = false; return; }
+      exercises.push({
+        name,
+        sets:     row.querySelector('.ex-sets').value,
+        reps:     row.querySelector('.ex-reps').value,
+        weightKg: row.querySelector('.ex-weight').value,
+        notes:    row.querySelector('.ex-notes').value.trim(),
+      });
+    });
+
+    if (!valid || exercises.length === 0) {
+      errEl.textContent = 'Please give every exercise a name, or add at least one exercise.';
+      return;
+    }
+
+    try {
+      await API.post('/workouts', { date, notes, exercises });
+      hideCompletionEditor();
+      showAlert(document.querySelector('main'), 'Workout logged! View it in your Progression Tracker.');
+    } catch (err) {
+      errEl.textContent = err.message || 'Failed to log workout.';
+    }
+  });
+
+  // ── Render routines list ─────────────────────────────────────────────────
+  async function render() {
+    routinesData = await API.get('/user/plans').catch(() => []);
+    const container  = document.getElementById('routines-list');
+    const emptyState = document.getElementById('routines-empty');
+    container.innerHTML = '';
+
+    if (routinesData.length === 0) {
+      emptyState.style.display = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    routinesData.forEach(plan => {
+      const blockId = 'routine-' + plan.id;
+      const div = document.createElement('div');
+      div.className = 'routine-block';
+      div.innerHTML = `
+        <div class="routine-header" data-target="${blockId}">
+          <span class="routine-title">${escHtml(plan.name)}</span>
+          <span class="routine-meta">${plan.exercises.length} exercise${plan.exercises.length !== 1 ? 's' : ''}${plan.description ? ' · ' + escHtml(plan.description) : ''}</span>
+          <span class="routine-toggle">▼</span>
+        </div>
+        <div class="routine-body" id="${blockId}">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th><th>Notes</th></tr>
+              </thead>
+              <tbody>
+                ${plan.exercises.map(e => `
+                  <tr>
+                    <td><strong>${escHtml(e.name)}</strong></td>
+                    <td>${escHtml(e.sets) || '—'}</td>
+                    <td>${escHtml(e.reps) || '—'}</td>
+                    <td>${parseFloat(e.weightKg) > 0 ? parseFloat(e.weightKg).toFixed(1) : '—'}</td>
+                    <td>${escHtml(e.notes) || '—'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="routine-actions">
+            <button class="btn-xs complete btn-complete-routine" data-id="${plan.id}">✔ Complete This Plan</button>
+          </div>
+        </div>
+      `;
+
+      div.querySelector('.routine-header').addEventListener('click', function () {
+        const body = document.getElementById(this.dataset.target);
+        const isOpen = body.classList.toggle('open');
+        this.querySelector('.routine-toggle').textContent = isOpen ? '▲' : '▼';
+      });
+
+      div.querySelector('.btn-complete-routine').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const plan = routinesData.find(p => p.id === e.currentTarget.dataset.id);
+        showCompletionEditor(plan);
+      });
+
+      container.appendChild(div);
+    });
+  }
+
+  render();
+</script>
+</body>
+</html>
