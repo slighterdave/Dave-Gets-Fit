@@ -262,7 +262,7 @@ test('food search uses world Open Food Facts endpoint with UK country filter', a
   }
 });
 
-test('food search filters out products whose name does not contain the query', async () => {
+test('food search filters out products whose name does not contain any query word', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -285,6 +285,33 @@ test('food search filters out products whose name does not contain the query', a
     assert.equal(status, 200);
     assert.equal(body.length, 2);
     assert.ok(body.every(r => r.name.toLowerCase().includes('apple')), 'all results should contain the query in the name');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('food search with multi-word query returns products matching any query word', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      return {
+        ok: true,
+        json: async () => ({
+          products: [
+            { product_name_en: 'Chicken Breast Fillets', nutriments: { 'energy-kcal_100g': 110 } },
+            { product_name_en: 'Roast Chicken', nutriments: { 'energy-kcal_100g': 153 } },
+            { product_name_en: 'Marmite Yeast Extract', nutriments: { 'energy-kcal_100g': 260 } },
+          ],
+        }),
+      };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=chicken+breast', undefined, aliceToken);
+    assert.equal(status, 200);
+    assert.equal(body.length, 2);
+    assert.ok(body.every(r => r.name.toLowerCase().includes('chicken')), 'all results should contain a query word');
   } finally {
     global.fetch = originalFetch;
   }
