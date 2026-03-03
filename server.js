@@ -181,14 +181,18 @@ function requireAuth(req, res, next) {
 
 // ── Role middleware ───────────────────────────────────────────────────────────
 function requireAdmin(req, res, next) {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required.' });
+  const user = stmts.getUserById.get(req.user.userId);
+  if (!user || user.role !== 'admin') return res.status(403).json({ error: 'Admin access required.' });
+  req.user.role = user.role;
   next();
 }
 
 function requireTrainer(req, res, next) {
-  if (req.user.role !== 'trainer' && req.user.role !== 'admin') {
+  const user = stmts.getUserById.get(req.user.userId);
+  if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
     return res.status(403).json({ error: 'Trainer access required.' });
   }
+  req.user.role = user.role;
   next();
 }
 
