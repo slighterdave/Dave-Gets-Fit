@@ -296,7 +296,7 @@ const Auth = {
       const routinesLink = document.createElement('a');
       routinesLink.id = 'nav-routines-link';
       routinesLink.href = 'my-routines.html';
-      routinesLink.textContent = '🏋 My Routines';
+      routinesLink.textContent = 'My Routines';
       if (window.location.pathname.endsWith('my-routines.html')) routinesLink.classList.add('active');
       navLinks.appendChild(routinesLink);
     }
@@ -307,7 +307,7 @@ const Auth = {
         const link = document.createElement('a');
         link.id   = 'nav-admin-link';
         link.href = 'admin.html';
-        link.textContent = role === 'admin' ? '⚙ Admin' : '👥 My Athletes';
+        link.textContent = role === 'admin' ? 'Admin' : 'My Athletes';
         if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
         const navUser = nav.querySelector('.nav-user');
         nav.insertBefore(link, navUser || null);
@@ -320,7 +320,7 @@ const Auth = {
         const link = document.createElement('a');
         link.id   = 'nav-plans-link';
         link.href = 'trainer-plans.html';
-        link.textContent = '📋 Plans';
+        link.textContent = 'Plans';
         if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
         const navUser = nav.querySelector('.nav-user');
         nav.insertBefore(link, navUser || null);
