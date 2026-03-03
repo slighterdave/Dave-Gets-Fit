@@ -242,7 +242,7 @@ test('food search returns 400 when query is missing', async () => {
   assert.ok(body.error);
 });
 
-test('food search uses world Open Food Facts endpoint with UK country filter', async () => {
+test('food search uses world Open Food Facts endpoint without country restriction', async () => {
   let capturedUrl = null;
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
@@ -256,7 +256,7 @@ test('food search uses world Open Food Facts endpoint with UK country filter', a
     await req('GET', '/api/food/search?q=chicken', undefined, aliceToken);
     assert.ok(capturedUrl, 'fetch to openfoodfacts should have been called');
     assert.equal(new URL(capturedUrl).hostname, 'world.openfoodfacts.org');
-    assert.ok(capturedUrl.includes('countries_tags=united-kingdom'), 'should filter by UK country');
+    assert.ok(!capturedUrl.includes('countries_tags='), 'should not restrict by country');
   } finally {
     global.fetch = originalFetch;
   }
