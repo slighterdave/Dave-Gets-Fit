@@ -285,10 +285,21 @@ const Auth = {
 
   /** Inject/refresh role-based nav links based on the given role string */
   _injectNavLinks(role) {
-    ['nav-admin-link', 'nav-plans-link'].forEach(id => {
+    ['nav-admin-link', 'nav-plans-link', 'nav-routines-link'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.remove();
     });
+
+    // My Routines link – visible to all authenticated users
+    const navLinks = document.getElementById('nav-links');
+    if (navLinks && !navLinks.querySelector('a[href="my-routines.html"]')) {
+      const routinesLink = document.createElement('a');
+      routinesLink.id = 'nav-routines-link';
+      routinesLink.href = 'my-routines.html';
+      routinesLink.textContent = '🏋 My Routines';
+      if (window.location.pathname.endsWith('my-routines.html')) routinesLink.classList.add('active');
+      navLinks.appendChild(routinesLink);
+    }
 
     if (role === 'admin' || role === 'trainer') {
       const nav = document.querySelector('nav');
