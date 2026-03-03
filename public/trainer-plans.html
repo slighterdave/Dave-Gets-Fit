@@ -197,7 +197,7 @@
     const editor = document.getElementById('plan-editor');
     const errEl  = document.getElementById('plan-editor-error');
     errEl.textContent = '';
-    editor.style.display = '';
+    editor.style.display = 'block';
 
     document.getElementById('editing-plan-id').value = plan ? plan.id : '';
     document.getElementById('editor-title').textContent = plan ? 'Edit Plan' : 'Create New Plan';
