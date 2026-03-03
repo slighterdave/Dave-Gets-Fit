@@ -568,6 +568,13 @@ tbody tr:hover {
   color: #999;
 }
 
+/* Nav right group: keeps username, logout, and burger on one line */
+.nav-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 /* Nav user badge + logout */
 .nav-user {
   display: flex;
