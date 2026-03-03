@@ -127,11 +127,6 @@
 <script>
   Auth.requireAuth();
 
-  const role = Auth.role();
-  if (role !== 'trainer' && role !== 'admin') {
-    window.location.href = 'index.html';
-  }
-
   let allAthletes = [];
   let plansData   = [];
   let planExerciseRowCount = 0;
@@ -407,6 +402,17 @@
 
   // ── Boot ────────────────────────────────────────────────────────────────
   (async () => {
+    let role = Auth.role();
+    try {
+      const me = await API.get('/user/me');
+      role = me.role;
+    } catch (e) { console.warn('Could not refresh role from server:', e.message); }
+
+    if (role !== 'trainer' && role !== 'admin') {
+      window.location.href = 'index.html';
+      return;
+    }
+
     await loadAthletes();
     await render();
   })();

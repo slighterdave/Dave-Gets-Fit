@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const http   = require('node:http');
 const path   = require('node:path');
 const fs     = require('node:fs');
+const jwt    = require('jsonwebtoken');
 
 // Use a temp database for tests
 process.env.DB_PATH = path.join('/tmp', `dgf_test_${Date.now()}.db`);
@@ -379,6 +380,17 @@ test('non-admin cannot list users', async () => {
   assert.equal(status, 403);
 });
 
+test('admin with stale user JWT can still access admin endpoints', async () => {
+  // aliceToken was issued with role='user' (see setup: login alice) but
+  // alice's DB role is 'admin'. This simulates a user promoted to admin
+  // while already logged in with an old token.
+  const payload = JSON.parse(Buffer.from(aliceToken.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'user');
+  const { status, body } = await req('GET', '/api/admin/users', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+});
+
 test('admin can list all users', async () => {
   const { status, body } = await req('GET', '/api/admin/users', undefined, adminToken);
   assert.equal(status, 200);
@@ -493,6 +505,23 @@ test('setup: login carol as trainer', async () => {
   trainerToken = body.token;
   const payload = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString());
   assert.equal(payload.role, 'trainer');
+});
+
+test('trainer with stale user JWT can still access trainer endpoints', async () => {
+  // carol is a trainer in the DB. Craft a JWT that claims role='user' to
+  // simulate carol's token being issued before she was promoted to trainer.
+  // This avoids calling /api/auth/register (which would hit the rate limiter).
+  const carolUser = db.prepare('SELECT id FROM users WHERE username = ?').get('carol');
+  const staleToken = jwt.sign(
+    { userId: carolUser.id, username: 'carol', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  const payload = JSON.parse(Buffer.from(staleToken.split('.')[1], 'base64url').toString());
+  assert.equal(payload.role, 'user');
+  const { status, body } = await req('GET', '/api/trainer/users', undefined, staleToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
 });
 
 test('non-admin cannot list trainer assignments', async () => {
