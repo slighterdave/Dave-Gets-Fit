@@ -436,7 +436,12 @@
         const items = await API.get('/food/search?q=' + encodeURIComponent(q));
         showResults(Array.isArray(items) ? items : []);
       } catch (e) {
-        showResults([]);
+        resultsList.innerHTML = '';
+        const li = document.createElement('li');
+        li.textContent = e.message || 'Unable to search food database. Please try again or enter details manually.';
+        li.style.cssText = 'padding:10px 14px;color:#e07070;font-size:0.9rem;';
+        resultsList.appendChild(li);
+        resultsList.style.display = '';
       } finally {
         searchBtn.disabled = false;
         searchBtn.textContent = 'Search';
