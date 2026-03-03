@@ -325,28 +325,24 @@ const Auth = {
     }
 
     if (role === 'admin' || role === 'trainer') {
-      const nav = document.querySelector('nav');
-      if (nav) {
+      if (navLinks) {
         const link = document.createElement('a');
         link.id   = 'nav-admin-link';
         link.href = 'admin.html';
         link.textContent = role === 'admin' ? 'Admin' : 'My Athletes';
         if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
-        const navUser = nav.querySelector('.nav-user');
-        nav.insertBefore(link, navUser || null);
+        navLinks.appendChild(link);
       }
     }
 
     if (role === 'trainer' || role === 'admin') {
-      const nav = document.querySelector('nav');
-      if (nav) {
+      if (navLinks) {
         const link = document.createElement('a');
         link.id   = 'nav-plans-link';
         link.href = 'trainer-plans.html';
         link.textContent = 'Plans';
         if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
-        const navUser = nav.querySelector('.nav-user');
-        nav.insertBefore(link, navUser || null);
+        navLinks.appendChild(link);
       }
     }
   },
