@@ -1048,6 +1048,52 @@ test('completing a scheduled workout creates a workout entry', async () => {
   assert.ok(Array.isArray(created.exercises), 'exercises should be an array');
 });
 
+test('completing a scheduled workout with a plan copies plan exercises into the workout', async () => {
+  // Create a fresh athlete assigned to carol (the trainer) to avoid rate limiting
+  const planAthleteInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('plan_complete_athlete');
+  const planAthleteId    = planAthleteInfo.lastInsertRowid;
+  const planAthleteToken = jwt.sign(
+    { userId: planAthleteId, username: 'plan_complete_athlete', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: planAthleteId }, adminToken);
+
+  // Create a plan with exercises
+  const { body: planBody } = await req('POST', '/api/trainer/plans', {
+    name: 'Plan With Exercises',
+    description: 'Test plan',
+    exercises: [
+      { name: 'Squat', sets: '3', reps: '5', weightKg: '60', notes: '' },
+      { name: 'Deadlift', sets: '3', reps: '3', weightKg: '80', notes: '' },
+    ],
+  }, trainerToken);
+  assert.ok(planBody.id, 'plan should be created');
+
+  // Trainer schedules a workout for the athlete linked to that plan
+  const { body: schedBody } = await req('POST', '/api/trainer/schedule', {
+    userId: planAthleteId,
+    date: '2025-07-10',
+    title: 'Plan Day',
+    planId: planBody.id,
+  }, trainerToken);
+  assert.ok(schedBody.id, 'scheduled workout should be created');
+
+  // Athlete completes the scheduled workout
+  const { status, body } = await req('POST', `/api/schedule/${schedBody.id}/complete`, {}, planAthleteToken);
+  assert.equal(status, 201);
+  assert.ok(body.workoutId);
+
+  // The created workout should include exercises from the plan
+  const { body: workouts } = await req('GET', '/api/workouts', undefined, planAthleteToken);
+  const created = workouts.find(w => w.id === body.workoutId);
+  assert.ok(created, 'workout should appear in the workout list');
+  assert.ok(Array.isArray(created.exercises), 'exercises should be an array');
+  assert.equal(created.exercises.length, 2, 'exercises should be copied from the plan');
+  assert.equal(created.exercises[0].name, 'Squat');
+  assert.equal(created.exercises[1].name, 'Deadlift');
+});
+
 test('completing a non-existent scheduled workout returns 404', async () => {
   const { status, body } = await req('POST', '/api/schedule/does-not-exist/complete', {}, aliceToken);
   assert.equal(status, 404);
