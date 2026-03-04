@@ -185,7 +185,7 @@
   <div id="day-panel">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <h3 id="day-panel-title">Monday, 1 January 2025</h3>
-      <button class="btn btn-secondary" id="close-day-panel" style="padding:5px 14px;font-size:0.85rem;">Close</button>
+      <button class="btn btn-secondary" id="close-day-panel" style="padding:5px 14px;font-size:0.85rem;">✕ Close</button>
     </div>
 
     <div id="day-items">
@@ -416,9 +416,9 @@
             ${e.notes ? `<div class="schedule-item-notes">${escHtml(e.notes)}</div>` : ''}
           </div>
           <div class="schedule-item-actions">
-            ${!viewingUserId ? `<button class="btn-xs complete btn-complete-item" data-id="${e.id}" title="Mark as completed">Done</button>` : ''}
+            ${!viewingUserId ? `<button class="btn-xs complete btn-complete-item" data-id="${e.id}" title="Mark as completed">✓ Done</button>` : ''}
             <button class="btn-xs btn-edit-item" data-id="${e.id}" title="Edit">Edit</button>
-            <button class="btn-xs danger btn-delete-item" data-id="${e.id}" title="Remove">Remove</button>
+            <button class="btn-xs danger btn-delete-item" data-id="${e.id}" title="Remove">✕</button>
           </div>
         </div>
       `;
