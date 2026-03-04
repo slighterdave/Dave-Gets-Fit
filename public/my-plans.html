@@ -297,7 +297,8 @@
   }
 
   async function loadUserPlans() {
-    userPlans = await API.get('/user/plans').catch(() => []);
+    const endpoint = viewingUserId ? `/user/plans?userId=${viewingUserId}` : '/user/plans';
+    userPlans = await API.get(endpoint).catch(() => []);
     rebuildPlanSelect();
   }
 
@@ -461,6 +462,13 @@
 
   document.getElementById('add-schedule-btn').addEventListener('click', () => showForm());
   document.getElementById('cancel-form-btn').addEventListener('click', hideForm);
+  document.getElementById('form-plan-select').addEventListener('change', function () {
+    const titleInput = document.getElementById('form-title-input');
+    if (this.value && !titleInput.value.trim()) {
+      const plan = userPlans.find(p => p.id === this.value);
+      if (plan) titleInput.value = plan.name;
+    }
+  });
   document.getElementById('close-day-panel').addEventListener('click', () => {
     selectedDate = null;
     document.getElementById('day-panel').style.display = 'none';
