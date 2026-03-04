@@ -932,3 +932,94 @@ test('user can delete a scheduled workout', async () => {
   const { body: list } = await req('GET', '/api/schedule', undefined, aliceToken);
   assert.ok(!list.some(e => e.id === scheduleId));
 });
+
+test('trainer can view assigned athlete schedule via ?userId', async () => {
+  // Create a fresh athlete and assign to carol
+  const athleteInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('sched_athlete2');
+  const athleteId    = athleteInfo.lastInsertRowid;
+  const athleteToken = jwt.sign(
+    { userId: athleteId, username: 'sched_athlete2', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: athleteId }, adminToken);
+
+  // Trainer schedules a workout for the athlete
+  await req('POST', '/api/trainer/schedule', {
+    userId: athleteId,
+    date: '2025-08-01',
+    title: 'Trainer view test',
+  }, trainerToken);
+
+  // Trainer views athlete schedule via ?userId
+  const { status, body } = await req('GET', `/api/schedule?userId=${athleteId}`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.ok(body.some(e => e.title === 'Trainer view test'));
+
+  // Athlete can also see it
+  const { body: athleteSchedule } = await req('GET', '/api/schedule', undefined, athleteToken);
+  assert.ok(athleteSchedule.some(e => e.title === 'Trainer view test'));
+});
+
+test('trainer cannot view schedule for unassigned athlete via ?userId', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = users.find(u => u.username === 'alice').id;
+  const { status, body } = await req('GET', `/api/schedule?userId=${aliceId}`, undefined, trainerToken);
+  assert.equal(status, 403);
+  assert.ok(body.error);
+});
+
+test('regular user cannot view another user schedule via ?userId', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const bobId = users.find(u => u.username === 'bob').id;
+  // Use a freshly created regular user (alice is admin by this point in the test sequence)
+  const regularUserInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('regular_user');
+  const regularToken = jwt.sign(
+    { userId: regularUserInfo.lastInsertRowid, username: 'regular_user', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  const { status, body } = await req('GET', `/api/schedule?userId=${bobId}`, undefined, regularToken);
+  assert.equal(status, 403);
+  assert.ok(body.error);
+});
+
+test('trainer can view assigned athlete plans via ?userId', async () => {
+  // Create fresh trainer-athlete setup
+  const athlInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('plan_athlete');
+  const athlId   = athlInfo.lastInsertRowid;
+  const athlToken = jwt.sign(
+    { userId: athlId, username: 'plan_athlete', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: athlId }, adminToken);
+
+  // Trainer creates and assigns a plan to the athlete
+  const { body: planBody } = await req('POST', '/api/trainer/plans', {
+    name: 'Athlete Plan',
+    exercises: [{ name: 'Squat', sets: '3', reps: '10', weightKg: '60', notes: '' }],
+  }, trainerToken);
+  await req('POST', `/api/trainer/plans/${planBody.id}/assign`, { userId: athlId }, trainerToken);
+
+  // Trainer views athlete's plans via ?userId
+  const { status, body } = await req('GET', `/api/user/plans?userId=${athlId}`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.equal(body.length, 1);
+  assert.equal(body[0].name, 'Athlete Plan');
+
+  // Athlete can also see it
+  const { body: athlPlans } = await req('GET', '/api/user/plans', undefined, athlToken);
+  assert.equal(athlPlans.length, 1);
+  assert.equal(athlPlans[0].name, 'Athlete Plan');
+});
+
+test('trainer cannot view plans for unassigned athlete via ?userId', async () => {
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = users.find(u => u.username === 'alice').id;
+  const { status, body } = await req('GET', `/api/user/plans?userId=${aliceId}`, undefined, trainerToken);
+  assert.equal(status, 403);
+  assert.ok(body.error);
+});

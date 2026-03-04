@@ -664,8 +664,22 @@ app.delete('/api/trainer/plans/:id/assign/:userId', requireAuth, requireTrainer,
 });
 
 // ── User plans route ──────────────────────────────────────────────────────────
+// Optional ?userId=X allows trainers/admins to view an athlete's assigned plans
 app.get('/api/user/plans', requireAuth, (req, res) => {
-  const rows = stmts.getUserPlans.all(req.user.userId);
+  let targetUserId = req.user.userId;
+  if (req.query.userId) {
+    const requester = stmts.getUserById.get(req.user.userId);
+    if (!requester || (requester.role !== 'trainer' && requester.role !== 'admin')) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const targetId = parseInt(req.query.userId, 10);
+    if (isNaN(targetId)) return res.status(400).json({ error: 'Invalid userId parameter.' });
+    if (requester.role === 'trainer' && !stmts.isAssigned.get(req.user.userId, targetId)) {
+      return res.status(403).json({ error: 'User not assigned to you.' });
+    }
+    targetUserId = targetId;
+  }
+  const rows = stmts.getUserPlans.all(targetUserId);
   res.json(rows.map(r => JSON.parse(r.data)));
 });
 
@@ -708,13 +722,27 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
 
 // GET /api/schedule  – returns all scheduled workouts for the current user
 // Optional query params: ?from=YYYY-MM-DD&to=YYYY-MM-DD to filter by date range
+// Optional ?userId=X allows trainers/admins to view an athlete's schedule
 app.get('/api/schedule', requireAuth, (req, res) => {
   const { from, to } = req.query;
+  let targetUserId = req.user.userId;
+  if (req.query.userId) {
+    const requester = stmts.getUserById.get(req.user.userId);
+    if (!requester || (requester.role !== 'trainer' && requester.role !== 'admin')) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const targetId = parseInt(req.query.userId, 10);
+    if (isNaN(targetId)) return res.status(400).json({ error: 'Invalid userId parameter.' });
+    if (requester.role === 'trainer' && !stmts.isAssigned.get(req.user.userId, targetId)) {
+      return res.status(403).json({ error: 'User not assigned to you.' });
+    }
+    targetUserId = targetId;
+  }
   if (from && to) {
-    const rows = stmts.getScheduleForMonth.all(req.user.userId, from, to);
+    const rows = stmts.getScheduleForMonth.all(targetUserId, from, to);
     return res.json(rows);
   }
-  res.json(stmts.getSchedule.all(req.user.userId));
+  res.json(stmts.getSchedule.all(targetUserId));
 });
 
 // POST /api/schedule  – create a new scheduled workout entry
