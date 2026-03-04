@@ -1023,3 +1023,53 @@ test('trainer cannot view plans for unassigned athlete via ?userId', async () =>
   assert.equal(status, 403);
   assert.ok(body.error);
 });
+
+// ── Schedule complete ─────────────────────────────────────────────────────────
+let scheduleCompleteId;
+
+test('setup: create a scheduled workout to complete', async () => {
+  const { body } = await req('POST', '/api/schedule', { date: '2025-06-01', title: 'Leg Day', notes: 'Heavy squats' }, aliceToken);
+  assert.equal(body.ok, true);
+  scheduleCompleteId = body.id;
+  assert.ok(scheduleCompleteId);
+});
+
+test('completing a scheduled workout creates a workout entry', async () => {
+  const { status, body } = await req('POST', `/api/schedule/${scheduleCompleteId}/complete`, {}, aliceToken);
+  assert.equal(status, 201);
+  assert.equal(body.ok, true);
+  assert.ok(body.workoutId, 'should return the new workout id');
+
+  const { body: workouts } = await req('GET', '/api/workouts', undefined, aliceToken);
+  const created = workouts.find(w => w.id === body.workoutId);
+  assert.ok(created, 'workout should appear in the workout list');
+  assert.equal(created.date, '2025-06-01');
+  assert.ok(created.notes.includes('Leg Day'), 'notes should include the scheduled workout title');
+  assert.ok(Array.isArray(created.exercises), 'exercises should be an array');
+});
+
+test('completing a non-existent scheduled workout returns 404', async () => {
+  const { status, body } = await req('POST', '/api/schedule/does-not-exist/complete', {}, aliceToken);
+  assert.equal(status, 404);
+  assert.ok(body.error);
+});
+
+test("completing another user's scheduled workout returns 403", async () => {
+  // Create a different user via DB insert to avoid hitting the auth rate limiter
+  const otherUserInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('other_user_complete');
+  const otherToken = jwt.sign(
+    { userId: otherUserInfo.lastInsertRowid, username: 'other_user_complete', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  // Other user tries to complete Alice's scheduled workout
+  const { status, body } = await req('POST', `/api/schedule/${scheduleCompleteId}/complete`, {}, otherToken);
+  assert.equal(status, 403);
+  assert.ok(body.error);
+});
+
+test('completing a scheduled workout requires auth', async () => {
+  const { status } = await req('POST', `/api/schedule/${scheduleCompleteId}/complete`, {});
+  assert.equal(status, 401);
+});

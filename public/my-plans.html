@@ -416,6 +416,7 @@
             ${e.notes ? `<div class="schedule-item-notes">${escHtml(e.notes)}</div>` : ''}
           </div>
           <div class="schedule-item-actions">
+            ${!viewingUserId ? `<button class="btn-xs complete btn-complete-item" data-id="${e.id}" title="Mark as completed">✓ Done</button>` : ''}
             <button class="btn-xs btn-edit-item" data-id="${e.id}" title="Edit">✏</button>
             <button class="btn-xs danger btn-delete-item" data-id="${e.id}" title="Remove">✕</button>
           </div>
@@ -437,6 +438,16 @@
           await API.del(`/schedule/${btn.dataset.id}`);
           await refresh();
           renderDayItems(ds);
+        } catch (err) { alert(err.message); }
+      });
+    });
+    container.querySelectorAll('.btn-complete-item').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          const { workoutId } = await API.post(`/schedule/${btn.dataset.id}/complete`, {});
+          if (confirm('Workout logged! View it on the Progression page?')) {
+            window.location.href = 'progression.html';
+          }
         } catch (err) { alert(err.message); }
       });
     });

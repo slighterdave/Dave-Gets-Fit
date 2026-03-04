@@ -800,6 +800,19 @@ app.delete('/api/schedule/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/schedule/:id/complete  – mark a scheduled workout as completed by creating a workout entry
+app.post('/api/schedule/:id/complete', requireAuth, (req, res) => {
+  const scheduled = stmts.getScheduleById.get(req.params.id);
+  if (!scheduled) return res.status(404).json({ error: 'Scheduled workout not found.' });
+  if (scheduled.user_id !== req.user.userId) return res.status(403).json({ error: 'Access denied.' });
+
+  const notes = [scheduled.title, scheduled.notes].filter(Boolean).join(' – ');
+  const workoutId = crypto.randomUUID();
+  const session = { id: workoutId, date: scheduled.date, notes, exercises: [] };
+  stmts.insertWorkout.run(workoutId, req.user.userId, scheduled.date, JSON.stringify(session));
+  res.status(201).json({ ok: true, workoutId });
+});
+
 // POST /api/trainer/schedule  – trainer schedules a workout for an athlete
 app.post('/api/trainer/schedule', requireAuth, requireTrainer, (req, res) => {
   const { userId, date, title, planId = null, notes = '' } = req.body || {};
