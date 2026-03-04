@@ -56,7 +56,7 @@
   </div>
 
   <div class="card" id="welcome-section">
-    <h2 id="welcome-heading" style="color:#cc1a1a;">Welcome! 👋</h2>
+    <h2 id="welcome-heading" style="color:#cc1a1a;">Welcome!</h2>
     <p id="welcome-body" style="margin-top:10px;color:#888;">Use the sections above to start tracking your fitness.</p>
     <a class="btn btn-primary" href="profile.html" id="profile-btn" style="display:inline-block;margin-top:16px;">Set Up Profile</a>
     <button class="btn btn-danger" id="reset-btn" style="margin-top:16px;display:none;">Reset Account</button>
@@ -75,7 +75,7 @@
     const resetBtn = document.getElementById('reset-btn');
 
     if (profile && profile.firstName) {
-      heading.textContent = 'Welcome back, ' + profile.firstName + '! 👋';
+      heading.textContent = 'Welcome back, ' + profile.firstName + '!';
       body.textContent    = 'Your account is set up and ready to go. Use the navigation above to start tracking.';
       btn.textContent     = 'Edit Profile';
       resetBtn.style.display = '';

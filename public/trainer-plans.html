@@ -179,7 +179,7 @@
           <label>Notes</label>
           <input type="text" class="ex-notes" placeholder="Optional cues" value="${escHtml(notes)}" />
         </div>
-        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">✕</button>
+        <button type="button" class="btn btn-danger btn-remove-exercise" title="Remove exercise">Remove</button>
       </div>
     `;
     setupExerciseRow(div, name);
@@ -316,8 +316,8 @@
             </table>
           </div>
           <div class="plan-actions">
-            <button class="btn-xs edit btn-edit-plan" data-id="${plan.id}">✏ Edit</button>
-            <button class="btn-xs danger btn-delete-plan" data-id="${plan.id}">🗑 Delete</button>
+            <button class="btn-xs edit btn-edit-plan" data-id="${plan.id}">Edit</button>
+            <button class="btn-xs danger btn-delete-plan" data-id="${plan.id}">Delete</button>
           </div>
           <div class="assign-section">
             <h4>Assigned Athletes</h4>
