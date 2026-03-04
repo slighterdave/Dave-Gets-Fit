@@ -150,7 +150,7 @@
 <body>
 
 <nav>
-  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <a class="brand" href="index.html"><img src="Assets/getusfit_logo.svg" alt="GetUs.Fit" class="brand-logo" /></a>
   <div class="nav-links" id="nav-links">
     <a href="index.html">Home</a>
     <a href="progression.html">Progression</a>
@@ -412,12 +412,12 @@
         <div class="schedule-item" data-id="${e.id}">
           <div class="schedule-item-info">
             <div class="schedule-item-title">${escHtml(e.title)}</div>
-            ${planLabel ? `<div class="schedule-item-meta">📋 ${escHtml(planLabel)}</div>` : ''}
+            ${planLabel ? `<div class="schedule-item-meta">${escHtml(planLabel)}</div>` : ''}
             ${e.notes ? `<div class="schedule-item-notes">${escHtml(e.notes)}</div>` : ''}
           </div>
           <div class="schedule-item-actions">
             ${!viewingUserId ? `<button class="btn-xs complete btn-complete-item" data-id="${e.id}" title="Mark as completed">✓ Done</button>` : ''}
-            <button class="btn-xs btn-edit-item" data-id="${e.id}" title="Edit">✏</button>
+            <button class="btn-xs btn-edit-item" data-id="${e.id}" title="Edit">Edit</button>
             <button class="btn-xs danger btn-delete-item" data-id="${e.id}" title="Remove">✕</button>
           </div>
         </div>

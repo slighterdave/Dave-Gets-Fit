@@ -9,7 +9,7 @@
 <body>
 
 <nav>
-  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <a class="brand" href="index.html"><img src="Assets/getusfit_logo.svg" alt="GetUs.Fit" class="brand-logo" /></a>
   <div class="nav-links" id="nav-links">
     <a href="index.html" class="active">Home</a>
     <a href="progression.html">Progression</a>
@@ -34,21 +34,29 @@
 
   <div class="features">
     <a class="feature-card" href="progression.html">
-      <div class="icon"><img src="Assets/getusfit_progression.png" alt="Progression" class="feature-icon" /></div>
+      <div class="icon"><img src="Assets/progression.svg" alt="Progression" class="feature-icon" /></div>
       <p>Log your workouts and track personal bests over time.</p>
     </a>
     <a class="feature-card" href="weight.html">
-      <div class="icon"><img src="Assets/getusfit_weight.png" alt="Weight" class="feature-icon" /></div>
+      <div class="icon"><img src="Assets/weight.svg" alt="Weight" class="feature-icon" /></div>
       <p>Record your weight and visualise your progress toward your goal.</p>
     </a>
     <a class="feature-card" href="calories.html">
-      <div class="icon"><img src="Assets/getusfit_calories.png" alt="Calories" class="feature-icon" /></div>
+      <div class="icon"><img src="Assets/calories.svg" alt="Calories" class="feature-icon" /></div>
       <p>Keep a daily food diary and stay on top of your calorie intake.</p>
+    </a>
+    <a class="feature-card" href="my-plans.html">
+      <div class="icon"><img src="Assets/my_plans.svg" alt="My Plans" class="feature-icon" /></div>
+      <p>Plan your week and schedule workouts with a personal calendar.</p>
+    </a>
+    <a class="feature-card" href="my-routines.html">
+      <div class="icon"><img src="Assets/my_routines.svg" alt="My Routines" class="feature-icon" /></div>
+      <p>Build and manage your saved workout routines.</p>
     </a>
   </div>
 
   <div class="card" id="welcome-section">
-    <h2 id="welcome-heading" style="color:#cc1a1a;">Welcome! 👋</h2>
+    <h2 id="welcome-heading" style="color:#cc1a1a;">Welcome!</h2>
     <p id="welcome-body" style="margin-top:10px;color:#888;">Use the sections above to start tracking your fitness.</p>
     <a class="btn btn-primary" href="profile.html" id="profile-btn" style="display:inline-block;margin-top:16px;">Set Up Profile</a>
     <button class="btn btn-danger" id="reset-btn" style="margin-top:16px;display:none;">Reset Account</button>
@@ -67,7 +75,7 @@
     const resetBtn = document.getElementById('reset-btn');
 
     if (profile && profile.firstName) {
-      heading.textContent = 'Welcome back, ' + profile.firstName + '! 👋';
+      heading.textContent = 'Welcome back, ' + profile.firstName + '!';
       body.textContent    = 'Your account is set up and ready to go. Use the navigation above to start tracking.';
       btn.textContent     = 'Edit Profile';
       resetBtn.style.display = '';

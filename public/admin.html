@@ -67,7 +67,7 @@
 <body>
 
 <nav>
-  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <a class="brand" href="index.html"><img src="Assets/getusfit_logo.svg" alt="GetUs.Fit" class="brand-logo" /></a>
   <div class="nav-links" id="nav-links">
     <a href="index.html">Home</a>
     <a href="progression.html">Progression</a>
@@ -88,7 +88,7 @@
 <main>
   <div class="card" id="admin-panel">
     <div class="section-header">
-      <h2 style="color:#cc1a1a;">⚙ Admin Panel</h2>
+      <h2 style="color:#cc1a1a;">Admin Panel</h2>
       <span id="panel-role-badge"></span>
     </div>
 
@@ -182,7 +182,7 @@
 
   <!-- Trainer view (non-admin trainers see this instead) -->
   <div class="card" id="trainer-panel">
-    <h2 style="color:#cc1a1a;">👥 My Athletes</h2>
+    <h2 style="color:#cc1a1a;">My Athletes</h2>
     <table class="users-table" id="trainer-users-table">
       <thead>
         <tr><th>#</th><th>Username</th><th>Role</th></tr>
@@ -270,11 +270,11 @@
         <td>${roleBadge(u.role)}</td>
         <td>
           <div class="action-row">
-            <button class="btn-xs promote" onclick="openEditForm(${u.id},'${escJs(u.username)}')" title="Edit user">✏ Edit</button>
+            <button class="btn-xs promote" onclick="openEditForm(${u.id},'${escJs(u.username)}')" title="Edit user">Edit</button>
             <button class="btn-xs promote" onclick="setRole(${u.id},'admin')"    ${u.role==='admin'    ? 'disabled' : ''} title="Make Admin">Admin</button>
             <button class="btn-xs promote" onclick="setRole(${u.id},'trainer')"  ${u.role==='trainer'  ? 'disabled' : ''} title="Make Trainer">Trainer</button>
             <button class="btn-xs demote"  onclick="setRole(${u.id},'user')"     ${u.role==='user'     ? 'disabled' : ''} title="Make User">User</button>
-            <button class="btn-xs delete"  onclick="deleteUser(${u.id},'${escJs(u.username)}')" title="Delete user">🗑</button>
+            <button class="btn-xs delete"  onclick="deleteUser(${u.id},'${escJs(u.username)}')" title="Delete user">Delete</button>
           </div>
         </td>
       </tr>`).join('');
