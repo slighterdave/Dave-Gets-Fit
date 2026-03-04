@@ -297,12 +297,7 @@
   }
 
   async function loadUserPlans() {
-    if (viewingUserId) {
-      // trainer viewing an athlete's plans — no separate endpoint; use trainer plans
-      userPlans = await API.get('/user/plans').catch(() => []);
-    } else {
-      userPlans = await API.get('/user/plans').catch(() => []);
-    }
+    userPlans = await API.get('/user/plans').catch(() => []);
     rebuildPlanSelect();
   }
 

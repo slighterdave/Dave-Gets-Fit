@@ -110,22 +110,6 @@ db.exec(`
 // Migration: add role column to databases created before this feature
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
 
-// Migration: add scheduled_workouts table for databases created before this feature
-try {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS scheduled_workouts (
-      id       TEXT    PRIMARY KEY,
-      user_id  INTEGER NOT NULL,
-      date     TEXT    NOT NULL,
-      plan_id  TEXT,
-      title    TEXT    NOT NULL,
-      notes    TEXT    NOT NULL DEFAULT '',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
-    )
-  `);
-} catch {}
-
 // Migration: add google_id column for social sign-in
 try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch {}
 try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL'); } catch {}
