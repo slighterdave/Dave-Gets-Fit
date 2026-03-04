@@ -807,8 +807,19 @@ app.post('/api/schedule/:id/complete', requireAuth, (req, res) => {
   if (scheduled.user_id !== req.user.userId) return res.status(403).json({ error: 'Access denied.' });
 
   const notes = [scheduled.title, scheduled.notes].filter(Boolean).join(' – ');
+  let exercises = [];
+  if (scheduled.plan_id) {
+    const plan = stmts.getPlanById.get(scheduled.plan_id);
+    if (plan) {
+      try {
+        exercises = JSON.parse(plan.data).exercises || [];
+      } catch (_) {
+        exercises = [];
+      }
+    }
+  }
   const workoutId = crypto.randomUUID();
-  const session = { id: workoutId, date: scheduled.date, notes, exercises: [] };
+  const session = { id: workoutId, date: scheduled.date, notes, exercises };
   stmts.insertWorkout.run(workoutId, req.user.userId, scheduled.date, JSON.stringify(session));
   res.status(201).json({ ok: true, workoutId });
 });
