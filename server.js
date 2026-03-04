@@ -94,10 +94,37 @@ db.exec(`
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS scheduled_workouts (
+    id       TEXT    PRIMARY KEY,
+    user_id  INTEGER NOT NULL,
+    date     TEXT    NOT NULL,
+    plan_id  TEXT,
+    title    TEXT    NOT NULL,
+    notes    TEXT    NOT NULL DEFAULT '',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
+  );
 `);
 
 // Migration: add role column to databases created before this feature
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
+
+// Migration: add scheduled_workouts table for databases created before this feature
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_workouts (
+      id       TEXT    PRIMARY KEY,
+      user_id  INTEGER NOT NULL,
+      date     TEXT    NOT NULL,
+      plan_id  TEXT,
+      title    TEXT    NOT NULL,
+      notes    TEXT    NOT NULL DEFAULT '',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
+    )
+  `);
+} catch {}
 
 // Migration: add google_id column for social sign-in
 try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch {}
@@ -141,6 +168,14 @@ const stmts = {
   unassignPlan:       db.prepare('DELETE FROM plan_assignments WHERE plan_id = ? AND user_id = ?'),
   getPlanAssignments: db.prepare('SELECT u.id, u.username FROM users u JOIN plan_assignments pa ON pa.user_id = u.id WHERE pa.plan_id = ? ORDER BY u.username COLLATE NOCASE'),
   getUserPlans:       db.prepare('SELECT p.id, p.data FROM plans p JOIN plan_assignments pa ON pa.plan_id = p.id WHERE pa.user_id = ? ORDER BY p.rowid'),
+  // Scheduled workouts
+  getSchedule:            db.prepare('SELECT id, user_id, date, plan_id, title, notes FROM scheduled_workouts WHERE user_id = ? ORDER BY date'),
+  getScheduleForMonth:    db.prepare('SELECT id, user_id, date, plan_id, title, notes FROM scheduled_workouts WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'),
+  insertSchedule:         db.prepare('INSERT INTO scheduled_workouts (id, user_id, date, plan_id, title, notes) VALUES (?, ?, ?, ?, ?, ?)'),
+  updateSchedule:         db.prepare('UPDATE scheduled_workouts SET date = ?, plan_id = ?, title = ?, notes = ? WHERE id = ? AND user_id = ?'),
+  deleteSchedule:         db.prepare('DELETE FROM scheduled_workouts WHERE id = ? AND user_id = ?'),
+  getScheduleById:        db.prepare('SELECT id, user_id, date, plan_id, title, notes FROM scheduled_workouts WHERE id = ?'),
+  deleteScheduleTrainer:  db.prepare('DELETE FROM scheduled_workouts WHERE id = ?'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -683,6 +718,97 @@ app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
     console.error('Barcode lookup error:', err.message || err);
     res.status(502).json({ error: 'Barcode lookup unavailable. Please enter details manually.' });
   }
+});
+
+// ── Schedule routes ───────────────────────────────────────────────────────────
+
+// GET /api/schedule  – returns all scheduled workouts for the current user
+// Optional query params: ?from=YYYY-MM-DD&to=YYYY-MM-DD to filter by date range
+app.get('/api/schedule', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (from && to) {
+    const rows = stmts.getScheduleForMonth.all(req.user.userId, from, to);
+    return res.json(rows);
+  }
+  res.json(stmts.getSchedule.all(req.user.userId));
+});
+
+// POST /api/schedule  – create a new scheduled workout entry
+app.post('/api/schedule', requireAuth, (req, res) => {
+  const { date, title, planId = null, notes = '' } = req.body || {};
+  if (!date || !title) {
+    return res.status(400).json({ error: 'date and title are required.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be in YYYY-MM-DD format.' });
+  }
+  if (planId !== null && planId !== undefined) {
+    const plan = stmts.getPlanById.get(planId);
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  }
+  const id = crypto.randomUUID();
+  stmts.insertSchedule.run(id, req.user.userId, date, planId || null, String(title).trim(), String(notes).trim());
+  res.status(201).json({ ok: true, id });
+});
+
+// PUT /api/schedule/:id  – update a scheduled workout entry
+app.put('/api/schedule/:id', requireAuth, (req, res) => {
+  const existing = stmts.getScheduleById.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Scheduled workout not found.' });
+  if (existing.user_id !== req.user.userId) return res.status(403).json({ error: 'Access denied.' });
+
+  const { date, title, planId = existing.plan_id, notes = existing.notes } = req.body || {};
+  if (!date || !title) {
+    return res.status(400).json({ error: 'date and title are required.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be in YYYY-MM-DD format.' });
+  }
+  stmts.updateSchedule.run(date, planId || null, String(title).trim(), String(notes).trim(), req.params.id, req.user.userId);
+  res.json({ ok: true });
+});
+
+// DELETE /api/schedule/:id  – delete a scheduled workout entry
+app.delete('/api/schedule/:id', requireAuth, (req, res) => {
+  const existing = stmts.getScheduleById.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Scheduled workout not found.' });
+  if (existing.user_id !== req.user.userId) {
+    // Allow trainers to delete entries they scheduled for athletes
+    const user = stmts.getUserById.get(req.user.userId);
+    if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    if (user.role === 'trainer' && !stmts.isAssigned.get(req.user.userId, existing.user_id)) {
+      return res.status(403).json({ error: 'User not assigned to you.' });
+    }
+    stmts.deleteScheduleTrainer.run(req.params.id);
+    return res.json({ ok: true });
+  }
+  stmts.deleteSchedule.run(req.params.id, req.user.userId);
+  res.json({ ok: true });
+});
+
+// POST /api/trainer/schedule  – trainer schedules a workout for an athlete
+app.post('/api/trainer/schedule', requireAuth, requireTrainer, (req, res) => {
+  const { userId, date, title, planId = null, notes = '' } = req.body || {};
+  if (!userId || !date || !title) {
+    return res.status(400).json({ error: 'userId, date and title are required.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be in YYYY-MM-DD format.' });
+  }
+  const targetUser = stmts.getUserById.get(userId);
+  if (!targetUser) return res.status(404).json({ error: 'User not found.' });
+  if (req.user.role !== 'admin' && !stmts.isAssigned.get(req.user.userId, userId)) {
+    return res.status(403).json({ error: 'User not assigned to you.' });
+  }
+  if (planId !== null && planId !== undefined) {
+    const plan = stmts.getPlanById.get(planId);
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+  }
+  const id = crypto.randomUUID();
+  stmts.insertSchedule.run(id, userId, date, planId || null, String(title).trim(), String(notes).trim());
+  res.status(201).json({ ok: true, id });
 });
 
 // ── Start server ─────────────────────────────────────────────────────────────────

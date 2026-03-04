@@ -804,3 +804,131 @@ test('trainer can delete a plan', async () => {
   const { body: plans } = await req('GET', '/api/trainer/plans', undefined, trainerToken);
   assert.equal(plans.length, 0);
 });
+
+// ── Schedule ───────────────────────────────────────────────────────────────────
+let scheduleId;
+
+test('user can schedule a workout', async () => {
+  const { status, body } = await req('POST', '/api/schedule', {
+    date: '2025-06-15',
+    title: 'Morning Run',
+    notes: 'Easy pace',
+  }, aliceToken);
+  assert.equal(status, 201);
+  assert.ok(body.id);
+  scheduleId = body.id;
+});
+
+test('schedule creation requires date and title', async () => {
+  const { status, body } = await req('POST', '/api/schedule', { notes: 'Missing fields' }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('schedule creation rejects invalid date format', async () => {
+  const { status, body } = await req('POST', '/api/schedule', { date: '15-06-2025', title: 'Bad date' }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('user can list their schedule', async () => {
+  const { status, body } = await req('GET', '/api/schedule', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.ok(body.length >= 1);
+  const entry = body.find(e => e.id === scheduleId);
+  assert.ok(entry, 'scheduled entry should appear in list');
+  assert.equal(entry.title, 'Morning Run');
+  assert.equal(entry.date, '2025-06-15');
+});
+
+test('user can filter schedule by date range', async () => {
+  const { status, body } = await req('GET', '/api/schedule?from=2025-06-01&to=2025-06-30', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+  assert.ok(body.some(e => e.id === scheduleId));
+});
+
+test('user can update a scheduled workout', async () => {
+  const { status, body } = await req('PUT', `/api/schedule/${scheduleId}`, {
+    date: '2025-06-16',
+    title: 'Evening Run',
+    notes: 'Faster pace',
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: list } = await req('GET', '/api/schedule', undefined, aliceToken);
+  const entry = list.find(e => e.id === scheduleId);
+  assert.equal(entry.title, 'Evening Run');
+  assert.equal(entry.date, '2025-06-16');
+});
+
+test('user cannot update another user schedule entry', async () => {
+  // Create a user directly in the DB to avoid hitting the auth rate limiter
+  const otherInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('sched_other_user');
+  const otherToken = jwt.sign(
+    { userId: otherInfo.lastInsertRowid, username: 'sched_other_user', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  const { status } = await req('PUT', `/api/schedule/${scheduleId}`, {
+    date: '2025-06-16', title: 'Hacked',
+  }, otherToken);
+  assert.equal(status, 403);
+});
+
+test('schedule requires auth', async () => {
+  const { status } = await req('GET', '/api/schedule');
+  assert.equal(status, 401);
+});
+
+test('trainer can schedule a workout for an assigned athlete', async () => {
+  // Create a fresh athlete directly in the DB to avoid the auth rate limiter
+  const athleteInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('sched_athlete');
+  const athleteId    = athleteInfo.lastInsertRowid;
+  const athleteToken = jwt.sign(
+    { userId: athleteId, username: 'sched_athlete', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  // Assign the fresh athlete to carol
+  await req('POST', '/api/admin/assignments', { trainerId: carolId, userId: athleteId }, adminToken);
+
+  const { status, body } = await req('POST', '/api/trainer/schedule', {
+    userId: athleteId,
+    date: '2025-07-01',
+    title: 'Trainer-assigned session',
+    notes: 'Focus on form',
+  }, trainerToken);
+  assert.equal(status, 201);
+  assert.ok(body.id);
+
+  // Athlete can see it in their schedule
+  const { status: sStatus, body: schedule } = await req('GET', '/api/schedule', undefined, athleteToken);
+  assert.equal(sStatus, 200);
+  assert.ok(Array.isArray(schedule), 'schedule should be an array');
+  assert.ok(schedule.some(e => e.title === 'Trainer-assigned session'));
+});
+
+test('trainer cannot schedule for unassigned user', async () => {
+  // alice is not assigned to carol
+  const { body: users } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = users.find(u => u.username === 'alice').id;
+  const { status, body } = await req('POST', '/api/trainer/schedule', {
+    userId: aliceId,
+    date: '2025-07-02',
+    title: 'Unassigned',
+  }, trainerToken);
+  assert.equal(status, 403);
+  assert.ok(body.error);
+});
+
+test('user can delete a scheduled workout', async () => {
+  const { status, body } = await req('DELETE', `/api/schedule/${scheduleId}`, undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+
+  const { body: list } = await req('GET', '/api/schedule', undefined, aliceToken);
+  assert.ok(!list.some(e => e.id === scheduleId));
+});
