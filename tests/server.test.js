@@ -262,7 +262,7 @@ test('food search returns 400 when query is missing', async () => {
   assert.ok(body.error);
 });
 
-test('food search uses USDA FoodData Central endpoint', async () => {
+test('food search uses USDA FoodData Central endpoint with all data types', async () => {
   app.foodSearchCache.clear();
   let capturedUrl = null;
   const originalFetch = global.fetch;
@@ -276,9 +276,15 @@ test('food search uses USDA FoodData Central endpoint', async () => {
   try {
     await req('GET', '/api/food/search?q=chicken', undefined, aliceToken);
     assert.ok(capturedUrl, 'fetch to USDA FDC should have been called');
-    assert.equal(new URL(capturedUrl).hostname, 'api.nal.usda.gov');
+    const captured = new URL(capturedUrl);
+    assert.equal(captured.hostname, 'api.nal.usda.gov');
     assert.ok(capturedUrl.includes('/fdc/v1/foods/search'), 'should use the FDC search endpoint');
     assert.ok(capturedUrl.includes('query=chicken'), 'should pass the query parameter');
+    const dataTypes = captured.searchParams.getAll('dataType');
+    assert.ok(dataTypes.includes('Foundation'), 'should request Foundation data type');
+    assert.ok(dataTypes.includes('SR Legacy'), 'should request SR Legacy data type');
+    assert.ok(dataTypes.includes('Branded'), 'should request Branded data type');
+    assert.ok(dataTypes.includes('Survey (FNDDS)'), 'should request Survey (FNDDS) data type');
   } finally {
     global.fetch = originalFetch;
   }

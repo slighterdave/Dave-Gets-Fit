@@ -458,7 +458,13 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     return res.json(cached.results);
   }
 
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&api_key=${USDA_API_KEY}&pageSize=20&dataType=Foundation,SR%20Legacy,Branded,Survey%20(FNDDS)`;
+  // Build the search URL using URLSearchParams so that all values (including
+  // the "Survey (FNDDS)" data type name which contains parentheses) are
+  // correctly percent-encoded.  Using repeated dataType keys (array-style) is
+  // more reliable than comma-separated values with certain server implementations.
+  const fdcParams = new URLSearchParams({ query, api_key: USDA_API_KEY, pageSize: '20' });
+  ['Foundation', 'SR Legacy', 'Branded', 'Survey (FNDDS)'].forEach(dt => fdcParams.append('dataType', dt));
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${fdcParams}`;
   console.log(`[food-search] Query: "${query}"`);
 
   let response;
