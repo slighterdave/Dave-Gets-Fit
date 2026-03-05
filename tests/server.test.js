@@ -318,6 +318,78 @@ test('food search with multi-word query returns all named products', async () =>
   }
 });
 
+test('food search returns 504 when upstream times out', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      const err = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      throw err;
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
+    assert.equal(status, 504);
+    assert.ok(body.error, 'response should contain an error message');
+    assert.ok(body.error.toLowerCase().includes('timed out'), 'error message should mention timeout');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('food search returns 502 when upstream returns a non-OK HTTP status', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
+    assert.equal(status, 502);
+    assert.ok(body.error, 'response should contain an error message');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('food search returns 502 when upstream returns invalid JSON', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      return { ok: true, json: async () => { throw new SyntaxError('Unexpected token'); } };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
+    assert.equal(status, 502);
+    assert.ok(body.error, 'response should contain an error message');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('food search returns 502 on network error with helpful message', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      const err = new TypeError('fetch failed');
+      err.code = 'ENOTFOUND';
+      throw err;
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
+    assert.equal(status, 502);
+    assert.ok(body.error, 'response should contain an error message');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('reset user data deletes all fitness records', async () => {
   // Add some data
   await req('PUT', '/api/profile', { firstName: 'Alice' }, aliceToken);

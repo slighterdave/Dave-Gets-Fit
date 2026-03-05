@@ -433,10 +433,14 @@
       if (!q) return;
       searchBtn.disabled = true;
       searchBtn.textContent = 'Searching…';
+      console.log('[food-search] Starting search for:', q);
       try {
         const items = await API.get('/food/search?q=' + encodeURIComponent(q));
-        showResults(Array.isArray(items) ? items : []);
+        const results = Array.isArray(items) ? items : [];
+        console.log('[food-search] Received', results.length, 'result(s) for:', q);
+        showResults(results);
       } catch (e) {
+        console.warn('[food-search] Error searching for "' + q + '":', e.message);
         resultsList.innerHTML = '';
         const li = document.createElement('li');
         li.textContent = e.message || 'Unable to search food database. Please try again or enter details manually.';
