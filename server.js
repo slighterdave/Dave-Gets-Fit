@@ -10,9 +10,10 @@ const crypto      = require('crypto');
 const fs          = require('fs');
 
 // ── Configuration ──────────────────────────────────────────────────────────────
-const PORT     = parseInt(process.env.PORT || '3000', 10);
-const DATA_DIR = process.env.DATA_DIR || __dirname;
-const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, 'data.db');
+const PORT          = parseInt(process.env.PORT || '3000', 10);
+const DATA_DIR      = process.env.DATA_DIR || __dirname;
+const DB_PATH       = process.env.DB_PATH  || path.join(DATA_DIR, 'data.db');
+const USDA_API_KEY  = process.env.USDA_API_KEY || 'DEMO_KEY';
 const SECRET_FILE = path.join(DATA_DIR, '.jwt_secret');
 
 function loadOrCreateSecret() {
@@ -434,10 +435,13 @@ app.delete('/api/calories/:id', requireAuth, (req, res) => {
 });
 
 // ── Food search proxy ────────────────────────────────────────────────────────────
-// Simple TTL cache keyed by lowercase query – avoids redundant calls to the slow
-// OpenFoodFacts API and dramatically reduces the chance of 504 timeouts for
-// repeated searches. The cache key is only the query because all other URL
-// parameters (page_size, fields, lc) are fixed constants in this route.
+// Simple TTL cache keyed by lowercase query – avoids redundant upstream calls.
+// The cache key is only the query because all other URL parameters are fixed
+// constants in this route.
+// Upstream: USDA FoodData Central (FDC) API – https://fdc.nal.usda.gov/
+// Set USDA_API_KEY in the environment to use your own registered key (free at
+// https://fdc.nal.usda.gov/api-key-signup.html); defaults to the shared DEMO_KEY
+// which allows 40 req/hour and 1,000 req/day per IP.
 const foodSearchCache = new Map(); // lowercase-query -> { results, expiresAt }
 const FOOD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const FOOD_CACHE_MAX_ENTRIES = 500;       // prevent unbounded memory growth
@@ -454,13 +458,13 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     return res.json(cached.results);
   }
 
-  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=20&fields=product_name,product_name_en,nutriments&lc=en`;
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&api_key=${USDA_API_KEY}&pageSize=20&dataType=Foundation,SR%20Legacy,Branded,Survey%20(FNDDS)`;
   console.log(`[food-search] Query: "${query}"`);
 
   let response;
   try {
     response = await fetch(url, {
-      headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
+      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
     });
   } catch (err) {
@@ -486,17 +490,22 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     return res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
   }
 
-  const products = json.products || [];
-  console.log(`[food-search] Upstream returned ${products.length} product(s) for query "${query}"`);
+  const foods = json.foods || [];
+  console.log(`[food-search] Upstream returned ${foods.length} food(s) for query "${query}"`);
 
-  const results = products
-    .filter(p => !!(p.product_name_en || p.product_name))
-    .map(p => ({
-      name:     p.product_name_en || p.product_name,
-      calories: p.nutriments?.['energy-kcal_100g'] ?? null,
-      protein:  p.nutriments?.proteins_100g ?? null,
-      carbs:    p.nutriments?.carbohydrates_100g ?? null,
-      fat:      p.nutriments?.fat_100g ?? null,
+  // Nutrient IDs from the USDA FDC schema:
+  //   1008 = Energy (kcal), 1003 = Protein (g),
+  //   1005 = Carbohydrate (g), 1004 = Total lipid/fat (g)
+  const getNutrient = (nutrients, id) => nutrients?.find(n => n.nutrientId === id)?.value ?? null;
+
+  const results = foods
+    .filter(f => !!(f.description))
+    .map(f => ({
+      name:     f.description,
+      calories: getNutrient(f.foodNutrients, 1008),
+      protein:  getNutrient(f.foodNutrients, 1003),
+      carbs:    getNutrient(f.foodNutrients, 1005),
+      fat:      getNutrient(f.foodNutrients, 1004),
     }));
 
   // Cache successful results to reduce load on the upstream API.
