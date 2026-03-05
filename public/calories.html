@@ -33,12 +33,10 @@
   <!-- Daily calorie goal – persistent, saved to user profile -->
   <div class="card" id="goal-card">
     <h2>Daily Calorie Goal</h2>
-    <div class="form-row" style="align-items:flex-end;">
-      <div class="form-group">
-        <label for="daily-goal-input">Target (kcal)</label>
+    <div class="form-group">
+      <label for="daily-goal-input">Target (kcal)</label>
+      <div style="display:flex;gap:8px;align-items:center;">
         <input type="number" id="daily-goal-input" placeholder="e.g. 2000" min="0" style="max-width:180px;" />
-      </div>
-      <div class="form-group" style="flex:0;">
         <button type="button" id="save-goal-btn" class="btn btn-primary">Save Goal</button>
       </div>
     </div>
