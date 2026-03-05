@@ -132,7 +132,11 @@ const stmts = {
   getCalories:    db.prepare('SELECT id, data FROM calories WHERE user_id = ? ORDER BY date, id'),
   insertCalorie:  db.prepare('INSERT INTO calories (user_id, date, data) VALUES (?, ?, ?)'),
   deleteCalorie:  db.prepare('DELETE FROM calories WHERE id = ? AND user_id = ?'),
-  deleteUserData:   db.prepare('DELETE FROM profiles WHERE user_id = ?'),
+  deleteUserData:      db.prepare('DELETE FROM profiles WHERE user_id = ?'),
+  deleteUserWorkouts:  db.prepare('DELETE FROM workouts WHERE user_id = ?'),
+  deleteUserWeights:   db.prepare('DELETE FROM weights WHERE user_id = ?'),
+  deleteUserCalories:  db.prepare('DELETE FROM calories WHERE user_id = ?'),
+  updateUserPassword:  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
   listUsers:        db.prepare('SELECT id, username, role FROM users ORDER BY username COLLATE NOCASE'),
   getUserById:      db.prepare('SELECT id, username, role FROM users WHERE id = ?'),
   updateUserRole:   db.prepare('UPDATE users SET role = ? WHERE id = ?'),
@@ -346,10 +350,10 @@ app.put('/api/profile', requireAuth, (req, res) => {
 app.delete('/api/user/data', requireAuth, (req, res) => {
   const uid = req.user.userId;
   db.transaction(() => {
-    db.prepare('DELETE FROM profiles  WHERE user_id = ?').run(uid);
-    db.prepare('DELETE FROM workouts  WHERE user_id = ?').run(uid);
-    db.prepare('DELETE FROM weights   WHERE user_id = ?').run(uid);
-    db.prepare('DELETE FROM calories  WHERE user_id = ?').run(uid);
+    stmts.deleteUserData.run(uid);
+    stmts.deleteUserWorkouts.run(uid);
+    stmts.deleteUserWeights.run(uid);
+    stmts.deleteUserCalories.run(uid);
   })();
   res.json({ ok: true });
 });
@@ -515,7 +519,7 @@ app.put('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+    stmts.updateUserPassword.run(hash, id);
   }
 
   res.json({ ok: true });

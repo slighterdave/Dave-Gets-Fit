@@ -326,35 +326,32 @@ const Auth = {
 
     if (role === 'admin' || role === 'trainer') {
       if (navLinks) {
-        const link = document.createElement('a');
-        link.id   = 'nav-admin-link';
-        link.href = 'admin.html';
-        link.textContent = role === 'admin' ? 'Admin' : 'My Athletes';
-        if (window.location.pathname.endsWith('admin.html')) link.classList.add('active');
-        navLinks.appendChild(link);
-      }
-    }
+        const adminLink = document.createElement('a');
+        adminLink.id   = 'nav-admin-link';
+        adminLink.href = 'admin.html';
+        adminLink.textContent = role === 'admin' ? 'Admin' : 'My Athletes';
+        if (window.location.pathname.endsWith('admin.html')) adminLink.classList.add('active');
+        navLinks.appendChild(adminLink);
 
-    if (role === 'trainer' || role === 'admin') {
-      if (navLinks) {
-        const link = document.createElement('a');
-        link.id   = 'nav-plans-link';
-        link.href = 'trainer-plans.html';
-        link.textContent = 'Plans';
-        if (window.location.pathname.endsWith('trainer-plans.html')) link.classList.add('active');
-        navLinks.appendChild(link);
+        const plansLink = document.createElement('a');
+        plansLink.id   = 'nav-plans-link';
+        plansLink.href = 'trainer-plans.html';
+        plansLink.textContent = 'Plans';
+        if (window.location.pathname.endsWith('trainer-plans.html')) plansLink.classList.add('active');
+        navLinks.appendChild(plansLink);
       }
     }
   },
 
   /** Redirect to login.html if no active session; also populates the nav username badge */
   requireAuth() {
-    if (!this.currentUser()) {
+    const user = this.currentUser();
+    if (!user) {
       window.location.href = 'login.html';
       return;
     }
     const el = document.getElementById('nav-username-display');
-    if (el) el.textContent = this.currentUser();
+    if (el) el.textContent = user;
 
     // Burger menu toggle
     const burger = document.getElementById('nav-burger');
