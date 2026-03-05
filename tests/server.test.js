@@ -262,13 +262,17 @@ test('food search returns 400 when query is missing', async () => {
   assert.ok(body.error);
 });
 
-test('food search uses USDA FoodData Central endpoint with all data types', async () => {
+test('food search uses USDA FoodData Central POST endpoint with all data types', async () => {
   app.foodSearchCache.clear();
   let capturedUrl = null;
+  let capturedBody = null;
+  let capturedMethod = null;
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       capturedUrl = url;
+      capturedMethod = opts?.method;
+      capturedBody = opts?.body ? JSON.parse(opts.body) : null;
       return { ok: true, json: async () => ({ foods: [] }) };
     }
     return originalFetch(url, opts);
@@ -279,11 +283,13 @@ test('food search uses USDA FoodData Central endpoint with all data types', asyn
     const captured = new URL(capturedUrl);
     assert.equal(captured.hostname, 'api.nal.usda.gov');
     assert.ok(capturedUrl.includes('/fdc/v1/foods/search'), 'should use the FDC search endpoint');
-    assert.ok(capturedUrl.includes('query=chicken'), 'should pass the query parameter');
-    // The USDA FDC API requires comma-separated dataType values (not repeated keys)
-    const dataTypeParam = captured.searchParams.get('dataType');
-    assert.ok(dataTypeParam, 'dataType parameter should be present');
-    const dataTypes = dataTypeParam.split(',');
+    assert.equal(capturedMethod, 'POST', 'should use POST to avoid URL-encoding issues with dataType');
+    assert.ok(capturedBody, 'request body should be present');
+    assert.equal(capturedBody.query, 'chicken', 'should pass the query in the request body');
+    // The USDA FDC POST endpoint accepts dataType as a JSON array – unambiguous and
+    // avoids the URL-encoding pitfalls that caused "food search unavailable" errors.
+    const dataTypes = capturedBody.dataType;
+    assert.ok(Array.isArray(dataTypes), 'dataType should be a JSON array');
     assert.ok(dataTypes.includes('Foundation'), 'should request Foundation data type');
     assert.ok(dataTypes.includes('SR Legacy'), 'should request SR Legacy data type');
     assert.ok(dataTypes.includes('Branded'), 'should request Branded data type');

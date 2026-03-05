@@ -458,22 +458,26 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     return res.json(cached.results);
   }
 
-  // Build the search URL: use URLSearchParams for the query, api_key, and
-  // pageSize parameters so that user input is correctly percent-encoded, then
-  // append the dataType parameter as a comma-separated list.  The USDA FDC API
-  // declares dataType with OpenAPI style:form/explode:false, meaning it expects
-  // a single comma-separated value (e.g. dataType=Foundation,SR%20Legacy) rather
-  // than repeated keys.  Using repeated keys caused the upstream API to return
-  // a non-2xx response, making every search return "food search unavailable".
-  const fdcParams = new URLSearchParams({ query, api_key: USDA_API_KEY, pageSize: '20' });
-  const dataType = ['Foundation', 'SR Legacy', 'Branded', 'Survey (FNDDS)'].map(encodeURIComponent).join(',');
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${fdcParams}&dataType=${dataType}`;
+  // Use the USDA FDC POST search endpoint so that dataType is sent as a JSON
+  // array in the request body – this is unambiguous and avoids the URL-encoding
+  // issues that plagued GET-based approaches (comma-separated values and
+  // repeated keys both caused the upstream API to behave unreliably).
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_API_KEY)}`;
   console.log(`[food-search] Query: "${query}"`);
 
   let response;
   try {
     response = await fetch(url, {
-      headers: { 'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)' },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'DaveGetsFit/1.0 (fitness tracking app)',
+      },
+      body: JSON.stringify({
+        query,
+        dataType: ['Foundation', 'SR Legacy', 'Branded', 'Survey (FNDDS)'],
+        pageSize: 20,
+      }),
       signal: AbortSignal.timeout(8000),
     });
   } catch (err) {
