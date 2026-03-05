@@ -30,6 +30,21 @@
   <h1>Calorie Tracker</h1>
   <p class="subtitle">Keep a daily food diary and stay on top of your calorie intake.</p>
 
+  <!-- Daily calorie goal – persistent, saved to user profile -->
+  <div class="card" id="goal-card">
+    <h2>Daily Calorie Goal</h2>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group">
+        <label for="daily-goal-input">Target (kcal)</label>
+        <input type="number" id="daily-goal-input" placeholder="e.g. 2000" min="0" style="max-width:180px;" />
+      </div>
+      <div class="form-group" style="flex:0;">
+        <button type="button" id="save-goal-btn" class="btn btn-primary">Save Goal</button>
+      </div>
+    </div>
+    <p id="goal-save-msg" style="font-size:0.85rem;color:#888;margin:4px 0 0;min-height:1.2em;"></p>
+  </div>
+
   <div class="card" id="form-card">
     <h2>Log a Meal</h2>
     <form id="calorie-form" novalidate>
@@ -79,6 +94,10 @@
           <label for="calories">Calories (kcal)</label>
           <input type="number" id="calories" placeholder="400" min="0" required />
         </div>
+        <div class="form-group">
+          <label for="quantity">Quantity</label>
+          <input type="number" id="quantity" value="1" min="1" step="1" placeholder="1" style="max-width:90px;" />
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -92,12 +111,6 @@
         <div class="form-group">
           <label for="macro-fat">Fat (g)</label>
           <input type="number" id="macro-fat" placeholder="0" min="0" step="0.1" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="daily-target">Daily Calorie Target (kcal)</label>
-          <input type="number" id="daily-target" placeholder="2000" min="0" />
         </div>
       </div>
       <button type="submit" class="btn btn-primary">Log Meal</button>
@@ -162,23 +175,24 @@
 
   <div class="card">
     <h2>Meals for Selected Day</h2>
-    <div class="empty-state" id="empty-msg">No meals logged for this day yet.</div>
-    <div class="table-scroll">
-    <table id="calorie-table" style="display:none;">
-      <thead>
-        <tr>
-          <th>Meal</th>
-          <th>Food / Drink</th>
-          <th>Calories (kcal)</th>
-          <th>Protein (g)</th>
-          <th>Carbs (g)</th>
-          <th>Fat (g)</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="calorie-tbody"></tbody>
-    </table>
-    </div>
+      <div class="empty-state" id="empty-msg">No meals logged for this day yet.</div>
+      <div class="table-scroll">
+      <table id="calorie-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>Meal</th>
+            <th>Food / Drink</th>
+            <th>Qty</th>
+            <th>Calories (kcal)</th>
+            <th>Protein (g)</th>
+            <th>Carbs (g)</th>
+            <th>Fat (g)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="calorie-tbody"></tbody>
+      </table>
+      </div>
   </div>  <!-- Camera overlay for barcode scanning -->
   <div id="barcode-overlay" role="dialog" aria-modal="true" aria-label="Barcode scanner" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;">
     <p id="barcode-status" style="color:#d4d4d4;font-size:0.95rem;margin:0;text-align:center;">Point camera at a barcode…</p>
@@ -195,18 +209,15 @@
 <script>
   Auth.requireAuth();
 
+  // Module-level daily calorie goal (loaded from profile on page init)
+  let dailyTarget = null;
+
   async function getEntries() {
     return API.get('/calories').catch(() => []);
   }
 
   function getViewDate() {
     return document.getElementById('view-date').value;
-  }
-
-  function getTarget(entries) {
-    const withTarget = entries.filter(e => e.target);
-    if (withTarget.length === 0) return null;
-    return parseFloat(withTarget[withTarget.length - 1].target);
   }
 
   function renderStats(entries) {
@@ -216,18 +227,17 @@
 
     document.getElementById('stat-total').textContent = total;
 
-    const target = getTarget(entries);
-    if (target) {
-      const remaining = target - total;
-      document.getElementById('stat-target').textContent = target;
+    if (dailyTarget) {
+      const remaining = dailyTarget - total;
+      document.getElementById('stat-target').textContent = dailyTarget;
       document.getElementById('stat-remaining').textContent = remaining >= 0 ? remaining : 'Over by ' + Math.abs(remaining);
 
-      const pct = Math.min(100, (total / target) * 100);
+      const pct = Math.min(100, (total / dailyTarget) * 100);
       document.getElementById('progress-bar').style.width = pct.toFixed(1) + '%';
       const bar = document.getElementById('progress-bar');
       bar.classList.toggle('progress-bar-over', pct > 100);
       document.getElementById('progress-label').textContent =
-        `${total} / ${target} kcal consumed (${pct.toFixed(0)}%)`;
+        `${total} / ${dailyTarget} kcal consumed (${pct.toFixed(0)}%)`;
       document.getElementById('progress-card').style.display = '';
     } else {
       document.getElementById('stat-target').textContent = '—';
@@ -309,9 +319,12 @@
     tbody.innerHTML = '';
     dayEntries.forEach((e) => {
       const tr = document.createElement('tr');
+      const qtyVal = parseFloat(e.qty);
+      const qty = e.qty && qtyVal > 1 ? '×' + qtyVal : '1';
       tr.innerHTML = `
         <td>${e.meal}</td>
         <td>${e.food}</td>
+        <td>${qty}</td>
         <td><strong>${parseFloat(e.calories).toFixed(0)}</strong></td>
         <td>${e.protein ? parseFloat(e.protein).toFixed(1) : '—'}</td>
         <td>${e.carbs   ? parseFloat(e.carbs).toFixed(1)   : '—'}</td>
@@ -335,16 +348,44 @@
     renderTable(entries);
   }
 
-  // Pre-fill target from saved data
-  async function prefillTarget() {
-    const entries = await getEntries();
-    const target = getTarget(entries);
-    if (target) document.getElementById('daily-target').value = target;
+  // ── Daily calorie goal (persistent via profile) ───────────────────────────────
+  async function loadGoal() {
+    try {
+      const profile = await API.get('/profile');
+      if (profile && profile.dailyCalorieGoal) {
+        dailyTarget = parseFloat(profile.dailyCalorieGoal);
+        document.getElementById('daily-goal-input').value = dailyTarget;
+      }
+    } catch { /* ignore – user may have no profile yet */ }
   }
+
+  document.getElementById('save-goal-btn').addEventListener('click', async function () {
+    const val = parseFloat(document.getElementById('daily-goal-input').value);
+    const msgEl = document.getElementById('goal-save-msg');
+    if (isNaN(val) || val <= 0) {
+      msgEl.textContent = 'Please enter a valid calorie target.';
+      msgEl.style.color = '#e07070';
+      return;
+    }
+    try {
+      const profile = await API.get('/profile').catch(() => ({}));
+      await API.put('/profile', { ...profile, dailyCalorieGoal: val });
+      dailyTarget = val;
+      msgEl.textContent = 'Goal saved!';
+      msgEl.style.color = '#888';
+      setTimeout(() => { msgEl.textContent = ''; }, 2500);
+      render();
+    } catch (err) {
+      msgEl.textContent = err.message || 'Failed to save goal.';
+      msgEl.style.color = '#e07070';
+    }
+  });
 
   document.getElementById('entry-date').value = today();
   document.getElementById('view-date').value  = today();
-  prefillTarget();
+
+  // Load goal from profile, then render with up-to-date dailyTarget
+  loadGoal().then(() => render());
 
   document.getElementById('view-date').addEventListener('change', render);
 
@@ -353,18 +394,29 @@
     const date     = document.getElementById('entry-date').value;
     const meal     = document.getElementById('meal-type').value;
     const food     = document.getElementById('food-name').value.trim();
-    const calories = document.getElementById('calories').value;
-    const protein  = document.getElementById('macro-protein').value;
-    const carbs    = document.getElementById('macro-carbs').value;
-    const fat      = document.getElementById('macro-fat').value;
-    const target   = document.getElementById('daily-target').value;
+    const qty      = Math.max(1, parseInt(document.getElementById('quantity').value, 10) || 1);
+    const calories = parseFloat(document.getElementById('calories').value);
+    const protein  = parseFloat(document.getElementById('macro-protein').value) || 0;
+    const carbs    = parseFloat(document.getElementById('macro-carbs').value)   || 0;
+    const fat      = parseFloat(document.getElementById('macro-fat').value)     || 0;
 
-    if (!date || !food || calories === '') {
+    if (!date || !food || isNaN(calories)) {
       alert('Please fill in date, food name, and calories.');
       return;
     }
 
-    await API.post('/calories', { date, meal, food, calories, protein, carbs, fat, target });
+    function scaleMacro(value) { return value > 0 ? (value * qty).toFixed(1) : ''; }
+
+    await API.post('/calories', {
+      date,
+      meal,
+      food,
+      qty,
+      calories: (calories * qty).toFixed(1),
+      protein:  scaleMacro(protein),
+      carbs:    scaleMacro(carbs),
+      fat:      scaleMacro(fat),
+    });
 
     // Switch view to logged date
     document.getElementById('view-date').value = date;
@@ -372,6 +424,7 @@
     showAlert(document.getElementById('form-card'), 'Meal logged successfully!');
     document.getElementById('food-name').value     = '';
     document.getElementById('calories').value      = '';
+    document.getElementById('quantity').value      = '1';
     document.getElementById('macro-protein').value = '';
     document.getElementById('macro-carbs').value   = '';
     document.getElementById('macro-fat').value     = '';
@@ -573,8 +626,6 @@
     lookupBtn.addEventListener('click', lookupManual);
     barcodeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookupManual(); } });
   }());
-
-  render();
 </script>
 </body>
 </html>
