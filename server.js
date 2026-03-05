@@ -458,13 +458,16 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     return res.json(cached.results);
   }
 
-  // Build the search URL using URLSearchParams so that all values (including
-  // the "Survey (FNDDS)" data type name which contains parentheses) are
-  // correctly percent-encoded.  Using repeated dataType keys (array-style) is
-  // more reliable than comma-separated values with certain server implementations.
+  // Build the search URL: use URLSearchParams for the query, api_key, and
+  // pageSize parameters so that user input is correctly percent-encoded, then
+  // append the dataType parameter as a comma-separated list.  The USDA FDC API
+  // declares dataType with OpenAPI style:form/explode:false, meaning it expects
+  // a single comma-separated value (e.g. dataType=Foundation,SR%20Legacy) rather
+  // than repeated keys.  Using repeated keys caused the upstream API to return
+  // a non-2xx response, making every search return "food search unavailable".
   const fdcParams = new URLSearchParams({ query, api_key: USDA_API_KEY, pageSize: '20' });
-  ['Foundation', 'SR Legacy', 'Branded', 'Survey (FNDDS)'].forEach(dt => fdcParams.append('dataType', dt));
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${fdcParams}`;
+  const dataType = ['Foundation', 'SR Legacy', 'Branded', 'Survey (FNDDS)'].map(encodeURIComponent).join(',');
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${fdcParams}&dataType=${dataType}`;
   console.log(`[food-search] Query: "${query}"`);
 
   let response;
