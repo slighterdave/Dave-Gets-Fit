@@ -434,9 +434,25 @@ app.delete('/api/calories/:id', requireAuth, (req, res) => {
 });
 
 // ── Food search proxy ────────────────────────────────────────────────────────────
+// Simple TTL cache keyed by lowercase query – avoids redundant calls to the slow
+// OpenFoodFacts API and dramatically reduces the chance of 504 timeouts for
+// repeated searches. The cache key is only the query because all other URL
+// parameters (page_size, fields, lc) are fixed constants in this route.
+const foodSearchCache = new Map(); // lowercase-query -> { results, expiresAt }
+const FOOD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const FOOD_CACHE_MAX_ENTRIES = 500;       // prevent unbounded memory growth
+
 app.get('/api/food/search', requireAuth, async (req, res) => {
   const query = (req.query.q || '').trim();
   if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
+
+  // Serve from cache when available
+  const cacheKey = query.toLowerCase();
+  const cached = foodSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log(`[food-search] Cache hit for query "${query}"`);
+    return res.json(cached.results);
+  }
 
   const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=20&fields=product_name,product_name_en,nutriments&lc=en`;
   console.log(`[food-search] Query: "${query}"`);
@@ -482,6 +498,13 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
       carbs:    p.nutriments?.carbohydrates_100g ?? null,
       fat:      p.nutriments?.fat_100g ?? null,
     }));
+
+  // Cache successful results to reduce load on the upstream API.
+  // Evict the oldest entry when the cache is full (Map iterates in insertion order).
+  if (foodSearchCache.size >= FOOD_CACHE_MAX_ENTRIES) {
+    foodSearchCache.delete(foodSearchCache.keys().next().value);
+  }
+  foodSearchCache.set(cacheKey, { results, expiresAt: Date.now() + FOOD_CACHE_TTL_MS });
 
   console.log(`[food-search] Returning ${results.length} named result(s) for query "${query}"`);
   res.json(results);
@@ -888,3 +911,4 @@ if (require.main === module) {
 
 module.exports = app;
 module.exports.db = db;
+module.exports.foodSearchCache = foodSearchCache;
