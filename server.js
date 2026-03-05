@@ -440,14 +440,8 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
     if (!response.ok) throw new Error('Upstream API error');
     const json = await response.json();
 
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
     const results = (json.products || [])
-      .filter(p => {
-        const name = p.product_name_en || p.product_name;
-        if (!name) return false;
-        const nameLower = name.toLowerCase();
-        return queryWords.length === 0 || queryWords.some(w => nameLower.includes(w));
-      })
+      .filter(p => !!(p.product_name_en || p.product_name))
       .map(p => ({
         name:     p.product_name_en || p.product_name,
         calories: p.nutriments?.['energy-kcal_100g'] ?? null,

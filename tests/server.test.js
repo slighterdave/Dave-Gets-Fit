@@ -262,7 +262,7 @@ test('food search uses world Open Food Facts endpoint without country restrictio
   }
 });
 
-test('food search filters out products whose name does not contain any query word', async () => {
+test('food search returns all products that have a name, regardless of query words in name', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -274,6 +274,7 @@ test('food search filters out products whose name does not contain any query wor
             { product_name_en: 'Green Apple', nutriments: { 'energy-kcal_100g': 52 } },
             { product_name_en: 'Marmite Yeast Extract', nutriments: { 'energy-kcal_100g': 260 } },
             { product_name_en: 'Intense Dark 70% Cocoa', nutriments: { 'energy-kcal_100g': 550 } },
+            { product_name_en: '', product_name: '' },
           ],
         }),
       };
@@ -283,14 +284,14 @@ test('food search filters out products whose name does not contain any query wor
   try {
     const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
     assert.equal(status, 200);
-    assert.equal(body.length, 2);
-    assert.ok(body.every(r => r.name.toLowerCase().includes('apple')), 'all results should contain the query in the name');
+    assert.equal(body.length, 4, 'all products with a name should be returned, relying on OpenFoodFacts relevance ranking');
+    assert.ok(body.every(r => r.name), 'every result must have a non-empty name');
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('food search with multi-word query returns products matching any query word', async () => {
+test('food search with multi-word query returns all named products', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -310,8 +311,8 @@ test('food search with multi-word query returns products matching any query word
   try {
     const { status, body } = await req('GET', '/api/food/search?q=chicken+breast', undefined, aliceToken);
     assert.equal(status, 200);
-    assert.equal(body.length, 2);
-    assert.ok(body.every(r => r.name.toLowerCase().includes('chicken')), 'all results should contain a query word');
+    assert.equal(body.length, 3, 'all named products should be returned for multi-word queries');
+    assert.ok(body.every(r => r.name), 'every result must have a non-empty name');
   } finally {
     global.fetch = originalFetch;
   }
