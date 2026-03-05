@@ -280,7 +280,10 @@ test('food search uses USDA FoodData Central endpoint with all data types', asyn
     assert.equal(captured.hostname, 'api.nal.usda.gov');
     assert.ok(capturedUrl.includes('/fdc/v1/foods/search'), 'should use the FDC search endpoint');
     assert.ok(capturedUrl.includes('query=chicken'), 'should pass the query parameter');
-    const dataTypes = captured.searchParams.getAll('dataType');
+    // The USDA FDC API requires comma-separated dataType values (not repeated keys)
+    const dataTypeParam = captured.searchParams.get('dataType');
+    assert.ok(dataTypeParam, 'dataType parameter should be present');
+    const dataTypes = dataTypeParam.split(',');
     assert.ok(dataTypes.includes('Foundation'), 'should request Foundation data type');
     assert.ok(dataTypes.includes('SR Legacy'), 'should request SR Legacy data type');
     assert.ok(dataTypes.includes('Branded'), 'should request Branded data type');
