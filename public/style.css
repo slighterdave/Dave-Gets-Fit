@@ -410,7 +410,7 @@ tbody tr:hover {
   max-width: 160px;
   height: auto;
   aspect-ratio: 1;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .feature-card h3 {
