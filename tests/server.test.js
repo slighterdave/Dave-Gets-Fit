@@ -263,6 +263,7 @@ test('food search returns 400 when query is missing', async () => {
 });
 
 test('food search uses world Open Food Facts endpoint without country restriction', async () => {
+  app.foodSearchCache.clear();
   let capturedUrl = null;
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
@@ -283,6 +284,7 @@ test('food search uses world Open Food Facts endpoint without country restrictio
 });
 
 test('food search returns all products that have a name, regardless of query words in name', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -312,6 +314,7 @@ test('food search returns all products that have a name, regardless of query wor
 });
 
 test('food search with multi-word query returns all named products', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -339,6 +342,7 @@ test('food search with multi-word query returns all named products', async () =>
 });
 
 test('food search returns 504 when upstream times out', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -358,6 +362,7 @@ test('food search returns 504 when upstream times out', async () => {
 });
 
 test('food search returns 502 when upstream returns a non-OK HTTP status', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -375,6 +380,7 @@ test('food search returns 502 when upstream returns a non-OK HTTP status', async
 });
 
 test('food search returns 502 when upstream returns invalid JSON', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -392,6 +398,7 @@ test('food search returns 502 when upstream returns invalid JSON', async () => {
 });
 
 test('food search returns 502 on network error with helpful message', async () => {
+  app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
@@ -405,6 +412,38 @@ test('food search returns 502 on network error with helpful message', async () =
     const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
     assert.equal(status, 502);
     assert.ok(body.error, 'response should contain an error message');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('food search caches successful results and avoids a second upstream call', async () => {
+  app.foodSearchCache.clear();
+  let callCount = 0;
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+      callCount++;
+      return {
+        ok: true,
+        json: async () => ({
+          products: [
+            { product_name_en: 'Banana', nutriments: { 'energy-kcal_100g': 89 } },
+          ],
+        }),
+      };
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const { status: s1, body: b1 } = await req('GET', '/api/food/search?q=banana', undefined, aliceToken);
+    assert.equal(s1, 200);
+    assert.equal(callCount, 1, 'upstream should be called on first request');
+
+    const { status: s2, body: b2 } = await req('GET', '/api/food/search?q=banana', undefined, aliceToken);
+    assert.equal(s2, 200);
+    assert.equal(callCount, 1, 'upstream should NOT be called again; cached result should be served');
+    assert.deepEqual(b2, b1, 'cached result should match the first response');
   } finally {
     global.fetch = originalFetch;
   }
