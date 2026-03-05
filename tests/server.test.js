@@ -484,37 +484,6 @@ test('reset user data deletes all fitness records', async () => {
   assert.equal(calories.length, 0);
 });
 
-// ── Barcode lookup ────────────────────────────────────────────────────────────
-test('barcode lookup requires auth', async () => {
-  const { status } = await req('GET', '/api/food/barcode/5000112637922');
-  assert.equal(status, 401);
-});
-
-test('barcode lookup returns 400 for invalid barcode format', async () => {
-  const { status, body } = await req('GET', '/api/food/barcode/abc', undefined, aliceToken);
-  assert.equal(status, 400);
-  assert.ok(body.error);
-});
-
-test('barcode lookup uses UK Open Food Facts endpoint', async () => {
-  let capturedUrl = null;
-  const originalFetch = global.fetch;
-  global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
-      capturedUrl = url;
-      return { ok: true, json: async () => ({ status: 0, product: null }) };
-    }
-    return originalFetch(url, opts);
-  };
-  try {
-    await req('GET', '/api/food/barcode/5000112637922', undefined, aliceToken);
-    assert.ok(capturedUrl, 'fetch to openfoodfacts should have been called');
-    assert.equal(new URL(capturedUrl).hostname, 'uk.openfoodfacts.org');
-  } finally {
-    global.fetch = originalFetch;
-  }
-});
-
 // ── Data isolation between users ──────────────────────────────────────────────
 test('users cannot see each other\'s data', async () => {
   // Register a second user and add data

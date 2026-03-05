@@ -756,41 +756,6 @@ app.get('/api/user/plans', requireAuth, (req, res) => {
   res.json(rows.map(r => JSON.parse(r.data)));
 });
 
-// ── Barcode lookup ────────────────────────────────────────────────────────────
-app.get('/api/food/barcode/:barcode', requireAuth, async (req, res) => {
-  const barcode = req.params.barcode.trim();
-  if (!/^\d{6,14}$/.test(barcode)) {
-    return res.status(400).json({ error: 'Invalid barcode format.' });
-  }
-
-  try {
-    const url = `https://uk.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_en,nutriments&lc=en`;
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!response.ok) throw new Error('Upstream API error');
-    const json = await response.json();
-
-    if (json.status !== 1 || !json.product) {
-      return res.status(404).json({ error: 'Product not found for this barcode.' });
-    }
-
-    const p = json.product;
-    res.json({
-      name:     p.product_name_en || p.product_name || 'Unknown product',
-      calories: p.nutriments?.['energy-kcal_100g'] ?? null,
-      protein:  p.nutriments?.proteins_100g ?? null,
-      carbs:    p.nutriments?.carbohydrates_100g ?? null,
-      fat:      p.nutriments?.fat_100g ?? null,
-    });
-  } catch (err) {
-    console.error('Barcode lookup error:', err.message || err);
-    res.status(502).json({ error: 'Barcode lookup unavailable. Please enter details manually.' });
-  }
-});
-
 // ── Schedule routes ───────────────────────────────────────────────────────────
 
 // GET /api/schedule  – returns all scheduled workouts for the current user
