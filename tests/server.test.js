@@ -262,41 +262,42 @@ test('food search returns 400 when query is missing', async () => {
   assert.ok(body.error);
 });
 
-test('food search uses world Open Food Facts endpoint without country restriction', async () => {
+test('food search uses USDA FoodData Central endpoint', async () => {
   app.foodSearchCache.clear();
   let capturedUrl = null;
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       capturedUrl = url;
-      return { ok: true, json: async () => ({ products: [] }) };
+      return { ok: true, json: async () => ({ foods: [] }) };
     }
     return originalFetch(url, opts);
   };
   try {
     await req('GET', '/api/food/search?q=chicken', undefined, aliceToken);
-    assert.ok(capturedUrl, 'fetch to openfoodfacts should have been called');
-    assert.equal(new URL(capturedUrl).hostname, 'world.openfoodfacts.org');
-    assert.ok(!capturedUrl.includes('countries_tags='), 'should not restrict by country');
+    assert.ok(capturedUrl, 'fetch to USDA FDC should have been called');
+    assert.equal(new URL(capturedUrl).hostname, 'api.nal.usda.gov');
+    assert.ok(capturedUrl.includes('/fdc/v1/foods/search'), 'should use the FDC search endpoint');
+    assert.ok(capturedUrl.includes('query=chicken'), 'should pass the query parameter');
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('food search returns all products that have a name, regardless of query words in name', async () => {
+test('food search returns all foods that have a description, regardless of query words in name', async () => {
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       return {
         ok: true,
         json: async () => ({
-          products: [
-            { product_name_en: 'Apple Juice', nutriments: { 'energy-kcal_100g': 46 } },
-            { product_name_en: 'Green Apple', nutriments: { 'energy-kcal_100g': 52 } },
-            { product_name_en: 'Marmite Yeast Extract', nutriments: { 'energy-kcal_100g': 260 } },
-            { product_name_en: 'Intense Dark 70% Cocoa', nutriments: { 'energy-kcal_100g': 550 } },
-            { product_name_en: '', product_name: '' },
+          foods: [
+            { description: 'Apple Juice', foodNutrients: [{ nutrientId: 1008, value: 46 }] },
+            { description: 'Green Apple', foodNutrients: [{ nutrientId: 1008, value: 52 }] },
+            { description: 'Marmite Yeast Extract', foodNutrients: [{ nutrientId: 1008, value: 260 }] },
+            { description: 'Intense Dark 70% Cocoa', foodNutrients: [{ nutrientId: 1008, value: 550 }] },
+            { description: '' },
           ],
         }),
       };
@@ -306,25 +307,25 @@ test('food search returns all products that have a name, regardless of query wor
   try {
     const { status, body } = await req('GET', '/api/food/search?q=apple', undefined, aliceToken);
     assert.equal(status, 200);
-    assert.equal(body.length, 4, 'all products with a name should be returned, relying on OpenFoodFacts relevance ranking');
+    assert.equal(body.length, 4, 'all foods with a description should be returned, relying on FDC relevance ranking');
     assert.ok(body.every(r => r.name), 'every result must have a non-empty name');
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('food search with multi-word query returns all named products', async () => {
+test('food search with multi-word query returns all named foods', async () => {
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       return {
         ok: true,
         json: async () => ({
-          products: [
-            { product_name_en: 'Chicken Breast Fillets', nutriments: { 'energy-kcal_100g': 110 } },
-            { product_name_en: 'Roast Chicken', nutriments: { 'energy-kcal_100g': 153 } },
-            { product_name_en: 'Marmite Yeast Extract', nutriments: { 'energy-kcal_100g': 260 } },
+          foods: [
+            { description: 'Chicken Breast Fillets', foodNutrients: [{ nutrientId: 1008, value: 110 }] },
+            { description: 'Roast Chicken', foodNutrients: [{ nutrientId: 1008, value: 153 }] },
+            { description: 'Marmite Yeast Extract', foodNutrients: [{ nutrientId: 1008, value: 260 }] },
           ],
         }),
       };
@@ -334,7 +335,7 @@ test('food search with multi-word query returns all named products', async () =>
   try {
     const { status, body } = await req('GET', '/api/food/search?q=chicken+breast', undefined, aliceToken);
     assert.equal(status, 200);
-    assert.equal(body.length, 3, 'all named products should be returned for multi-word queries');
+    assert.equal(body.length, 3, 'all named foods should be returned for multi-word queries');
     assert.ok(body.every(r => r.name), 'every result must have a non-empty name');
   } finally {
     global.fetch = originalFetch;
@@ -345,7 +346,7 @@ test('food search returns 504 when upstream times out', async () => {
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       const err = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
       throw err;
     }
@@ -365,7 +366,7 @@ test('food search returns 502 when upstream returns a non-OK HTTP status', async
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       return { ok: false, status: 503, json: async () => ({}) };
     }
     return originalFetch(url, opts);
@@ -383,7 +384,7 @@ test('food search returns 502 when upstream returns invalid JSON', async () => {
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       return { ok: true, json: async () => { throw new SyntaxError('Unexpected token'); } };
     }
     return originalFetch(url, opts);
@@ -401,7 +402,7 @@ test('food search returns 502 on network error with helpful message', async () =
   app.foodSearchCache.clear();
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       const err = new TypeError('fetch failed');
       err.code = 'ENOTFOUND';
       throw err;
@@ -422,13 +423,13 @@ test('food search caches successful results and avoids a second upstream call', 
   let callCount = 0;
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (typeof url === 'string' && new URL(url).hostname.endsWith('.openfoodfacts.org')) {
+    if (typeof url === 'string' && new URL(url).hostname === 'api.nal.usda.gov') {
       callCount++;
       return {
         ok: true,
         json: async () => ({
-          products: [
-            { product_name_en: 'Banana', nutriments: { 'energy-kcal_100g': 89 } },
+          foods: [
+            { description: 'Banana', foodNutrients: [{ nutrientId: 1008, value: 89 }] },
           ],
         }),
       };
