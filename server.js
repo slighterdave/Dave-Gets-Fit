@@ -430,31 +430,53 @@ app.get('/api/food/search', requireAuth, async (req, res) => {
   const query = (req.query.q || '').trim();
   if (!query) return res.status(400).json({ error: 'Query parameter q is required.' });
 
+  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=20&fields=product_name,product_name_en,nutriments&lc=en`;
+  console.log(`[food-search] Query: "${query}"`);
+
+  let response;
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&page_size=20&fields=product_name,product_name_en,nutriments&lc=en`;
-    const response = await fetch(url, {
+    response = await fetch(url, {
       headers: { 'User-Agent': 'GetUsFit/1.0 (fitness tracking app)' },
       signal: AbortSignal.timeout(8000),
     });
-
-    if (!response.ok) throw new Error('Upstream API error');
-    const json = await response.json();
-
-    const results = (json.products || [])
-      .filter(p => !!(p.product_name_en || p.product_name))
-      .map(p => ({
-        name:     p.product_name_en || p.product_name,
-        calories: p.nutriments?.['energy-kcal_100g'] ?? null,
-        protein:  p.nutriments?.proteins_100g ?? null,
-        carbs:    p.nutriments?.carbohydrates_100g ?? null,
-        fat:      p.nutriments?.fat_100g ?? null,
-      }));
-
-    res.json(results);
   } catch (err) {
-    console.error('Food search error:', err.message || err);
-    res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
+    if (isTimeout) {
+      console.error(`[food-search] Timeout for query "${query}"`);
+      return res.status(504).json({ error: 'Food search timed out. Please try again.' });
+    }
+    console.error(`[food-search] Network error for query "${query}": ${err.code || err.message}`);
+    return res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
   }
+
+  if (!response.ok) {
+    console.error(`[food-search] Upstream API returned HTTP ${response.status} for query "${query}"`);
+    return res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
+  }
+
+  let json;
+  try {
+    json = await response.json();
+  } catch (err) {
+    console.error(`[food-search] Failed to parse upstream response for query "${query}": ${err.message}`);
+    return res.status(502).json({ error: 'Food search unavailable. Please enter details manually.' });
+  }
+
+  const products = json.products || [];
+  console.log(`[food-search] Upstream returned ${products.length} product(s) for query "${query}"`);
+
+  const results = products
+    .filter(p => !!(p.product_name_en || p.product_name))
+    .map(p => ({
+      name:     p.product_name_en || p.product_name,
+      calories: p.nutriments?.['energy-kcal_100g'] ?? null,
+      protein:  p.nutriments?.proteins_100g ?? null,
+      carbs:    p.nutriments?.carbohydrates_100g ?? null,
+      fat:      p.nutriments?.fat_100g ?? null,
+    }));
+
+  console.log(`[food-search] Returning ${results.length} named result(s) for query "${query}"`);
+  res.json(results);
 });
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
