@@ -39,8 +39,15 @@ nav .brand {
 }
 
 nav .brand-logo {
-  height: 40px;
+  height: 56px;
   display: block;
+  filter: drop-shadow(0 0 8px rgba(204, 26, 26, 0.55));
+  transition: filter 0.2s, transform 0.2s;
+}
+
+nav .brand:hover .brand-logo {
+  filter: drop-shadow(0 0 14px rgba(204, 26, 26, 0.85));
+  transform: scale(1.06);
 }
 
 nav a {
