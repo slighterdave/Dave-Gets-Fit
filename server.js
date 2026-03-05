@@ -170,6 +170,14 @@ const stmts = {
 const app = express();
 app.use(express.json());
 
+// Trust exactly one reverse-proxy hop (nginx).  Without this, Express does not
+// inspect the X-Forwarded-For header, so req.ip resolves to the proxy's address
+// (127.0.0.1) rather than the real client IP.  express-rate-limit uses req.ip
+// as the rate-limit key, which means ALL users share one bucket and the rate
+// limits fire far too early.  Setting this to 1 also silences the
+// ERR_ERL_UNSET_TRUST_PROXY validation error that appears in the server logs.
+app.set('trust proxy', 1);
+
 // ── Rate limiters ───────────────────────────────────────────────────────────────
 // Strict limiter for authentication endpoints (prevents brute-force)
 const authLimiter = rateLimit({

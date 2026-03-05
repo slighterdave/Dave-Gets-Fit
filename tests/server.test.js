@@ -87,6 +87,26 @@ test('login with unknown user returns 401', async () => {
   assert.equal(status, 401);
 });
 
+// ── Trust proxy / rate limiting ───────────────────────────────────────────────
+test('trust proxy is set so rate limiting uses real client IP from X-Forwarded-For', async () => {
+  // When trust proxy = 1 Express reads req.ip from X-Forwarded-For.
+  // A spoofed header from a test client reaching the server directly is NOT
+  // trusted (the header injected by *our* connection is the one that counts),
+  // but we can at least confirm the Express setting is active: if trust proxy
+  // were disabled, a request with X-Forwarded-For would still return a
+  // successful response instead of being rate-limited by the proxy address.
+  // The simplest observable check: a public endpoint responds normally even
+  // when an X-Forwarded-For header is present (the app should not crash or
+  // reject it because of the missing trust proxy configuration).
+  const res = await fetch(baseUrl + '/api/config', {
+    headers: { 'X-Forwarded-For': '203.0.113.1', 'Content-Type': 'application/json' },
+  });
+  assert.equal(res.status, 200, 'request with X-Forwarded-For header should succeed');
+
+  // Verify the setting is present on the Express app itself.
+  assert.equal(app.get('trust proxy'), 1, 'Express trust proxy must be set to 1 for the deployed nginx reverse-proxy setup');
+});
+
 // ── Google auth config ────────────────────────────────────────────────────────
 test('GET /api/config returns googleClientId field', async () => {
   const { status, body } = await req('GET', '/api/config');
