@@ -410,7 +410,7 @@ tbody tr:hover {
   max-width: 160px;
   height: auto;
   aspect-ratio: 1;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .feature-card h3 {
@@ -521,8 +521,16 @@ tbody tr:hover {
     padding: 18px 16px;
   }
 
+  .feature-card p {
+    display: none;
+  }
+
+  .feature-card .icon {
+    margin-bottom: 0;
+  }
+
   .feature-card .feature-icon {
-    max-width: 100px;
+    max-width: 100%;
   }
 
   .table-scroll {
