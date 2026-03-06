@@ -178,6 +178,8 @@ const stmts = {
   getOneRepMaxes:   db.prepare('SELECT exercise, weight_kg, updated_at FROM one_rep_maxes WHERE user_id = ? ORDER BY exercise COLLATE NOCASE'),
   upsertOneRepMax:  db.prepare('INSERT INTO one_rep_maxes (user_id, exercise, weight_kg, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, exercise) DO UPDATE SET weight_kg = excluded.weight_kg, updated_at = excluded.updated_at'),
   deleteOneRepMax:  db.prepare('DELETE FROM one_rep_maxes WHERE user_id = ? AND exercise = ?'),
+  // Workout generator
+  getWorkoutsAfterDate: db.prepare('SELECT data FROM workouts WHERE user_id = ? AND date >= ? ORDER BY date DESC'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -924,6 +926,164 @@ app.post('/api/trainer/schedule', requireAuth, requireTrainer, (req, res) => {
   const id = crypto.randomUUID();
   stmts.insertSchedule.run(id, userId, date, planId || null, String(title).trim(), String(notes).trim());
   res.status(201).json({ ok: true, id });
+});
+
+// ── Workout Generator ────────────────────────────────────────────────────────────
+
+// Exercise pool keyed by the simplified muscle-group names used in the API.
+const GENERATOR_EXERCISES = {
+  chest: [
+    'Bench press (barbell)',
+    'Incline bench press (barbell)',
+    'Dumbbell bench press',
+    'Incline dumbbell press',
+    'Chest press (machine)',
+  ],
+  shoulders: [
+    'Overhead press (barbell)',
+    'Dumbbell shoulder press',
+    'Arnold press',
+    'Lateral raise (dumbbells/cable)',
+    'Front raise (dumbbells/plate)',
+  ],
+  triceps: [
+    'Triceps pushdown (cable)',
+    'Overhead triceps extension (DB/cable)',
+    'Skull crushers (EZ-bar)',
+  ],
+  back: [
+    'Bent-over row (barbell)',
+    'One-arm dumbbell row',
+    'Seated cable row',
+    'Lat pulldown (machine)',
+    'T-bar row',
+    'Pull-up (weighted)',
+    'Chin-up (weighted)',
+  ],
+  biceps: [
+    'Barbell curl',
+    'Dumbbell curl',
+    'Hammer curl',
+    'Preacher curl (machine/EZ-bar)',
+  ],
+  core: [
+    'Cable crunch',
+    'Weighted sit-up',
+    'Hanging knee/leg raise',
+    'Pallof press (cable/band)',
+    'Weighted Russian twist',
+    'Farmers carry (DB/KB)',
+  ],
+  legs: [
+    'Back squat (barbell)',
+    'Front squat (barbell)',
+    'Goblet squat (dumbbell/kettlebell)',
+    'Bulgarian split squat (DB/BB)',
+    'Leg press (machine)',
+    'Romanian deadlift (barbell)',
+    'Hip thrust (barbell)',
+    'Deadlift (conventional)',
+  ],
+  fullbody: [
+    'Power clean',
+    'Hang clean',
+    'Clean and press',
+    'Push press',
+    'Thruster (barbell/dumbbells)',
+    'Farmers walk',
+    'Kettlebell swing',
+  ],
+};
+
+const VALID_MUSCLE_GROUPS = Object.keys(GENERATOR_EXERCISES);
+
+// POST /api/workout-generator  – generate a personalised workout
+app.post('/api/workout-generator', requireAuth, (req, res) => {
+  const { intensity, muscleGroups, avoidDays = 0 } = req.body || {};
+
+  const intensityNum = parseInt(intensity, 10);
+  if (!Number.isFinite(intensityNum) || intensityNum < 1 || intensityNum > 10) {
+    return res.status(400).json({ error: 'intensity must be an integer between 1 and 10.' });
+  }
+
+  if (!Array.isArray(muscleGroups) || muscleGroups.length === 0) {
+    return res.status(400).json({ error: 'muscleGroups must be a non-empty array.' });
+  }
+  const invalidGroups = muscleGroups.filter(g => !VALID_MUSCLE_GROUPS.includes(g));
+  if (invalidGroups.length > 0) {
+    return res.status(400).json({
+      error: `Invalid muscle groups: ${invalidGroups.join(', ')}. Valid options: ${VALID_MUSCLE_GROUPS.join(', ')}.`,
+    });
+  }
+
+  const avoidDaysNum = parseInt(avoidDays, 10);
+  if (!Number.isFinite(avoidDaysNum) || avoidDaysNum < 0) {
+    return res.status(400).json({ error: 'avoidDays must be a non-negative integer.' });
+  }
+
+  // Intensity percentage: 1 → 50 %, 10 → 100 %
+  const intensityPct = Math.round(50 + (intensityNum - 1) / 9 * 50);
+
+  // Sets / reps scheme
+  let sets, reps;
+  if (intensityNum <= 4)      { sets = 3; reps = 15; }
+  else if (intensityNum <= 7) { sets = 4; reps = 8;  }
+  else                        { sets = 5; reps = 5;  }
+
+  // Build a map of 1RMs keyed by lowercase exercise name
+  const oneRepMaxRows = stmts.getOneRepMaxes.all(req.user.userId);
+  const oneRepMaxMap = {};
+  for (const row of oneRepMaxRows) {
+    oneRepMaxMap[row.exercise.toLowerCase()] = row.weight_kg;
+  }
+
+  // Collect exercises performed within avoidDays
+  const avoidedExercises = new Set();
+  if (avoidDaysNum > 0) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - avoidDaysNum);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    const recentRows = stmts.getWorkoutsAfterDate.all(req.user.userId, cutoffStr);
+    for (const row of recentRows) {
+      try {
+        const workout = JSON.parse(row.data);
+        if (Array.isArray(workout.exercises)) {
+          workout.exercises.forEach(e => { if (e.name) avoidedExercises.add(e.name.toLowerCase()); });
+        }
+      } catch (_) { /* ignore malformed rows */ }
+    }
+  }
+
+  // Generate exercises per selected muscle group (up to 3 each, no duplicates)
+  const exercises = [];
+  const usedExercises = new Set();
+
+  for (const group of muscleGroups) {
+    const pool = GENERATOR_EXERCISES[group] || [];
+    const available = pool.filter(e =>
+      !avoidedExercises.has(e.toLowerCase()) &&
+      !usedExercises.has(e.toLowerCase())
+    );
+
+    // Fisher-Yates shuffle for unbiased random selection
+    for (let i = available.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [available[i], available[j]] = [available[j], available[i]];
+    }
+    const picked = available.slice(0, 3);
+
+    for (const name of picked) {
+      usedExercises.add(name.toLowerCase());
+      const oneRepMaxKg = oneRepMaxMap[name.toLowerCase()] ?? null;
+      // Round to nearest 2.5 kg (e.g. 83% of 100 kg → 82.5 kg)
+      const suggestedWeightKg = oneRepMaxKg !== null
+        ? Math.round(oneRepMaxKg * intensityPct / 100 / 2.5) * 2.5
+        : null;
+      exercises.push({ name, muscleGroup: group, sets, reps, suggestedWeightKg, oneRepMaxKg, intensityPct });
+    }
+  }
+
+  res.json({ exercises, intensity: intensityNum, intensityPct, sets, reps, avoidedCount: avoidedExercises.size });
 });
 
 // ── Start server ─────────────────────────────────────────────────────────────────
