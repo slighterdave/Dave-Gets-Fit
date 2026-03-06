@@ -38,6 +38,11 @@
         <select id="chart-exercise-select"></select>
       </div>
     </div>
+    <div id="orm-badge" style="display:none;margin-top:10px;padding:8px 14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;font-size:0.9rem;">
+      <span style="color:#888;">Recorded 1RM:</span>
+      <strong id="orm-badge-value" style="color:#cc1a1a;margin-left:6px;"></strong>
+      <span style="color:#555;font-size:0.8rem;margin-left:6px;" id="orm-badge-date"></span>
+    </div>
     <canvas id="progression-canvas" height="220" style="width:100%;margin-top:16px;"></canvas>
   </div>
 
@@ -99,6 +104,7 @@
   Auth.requireAuth();
 
   async function getSessions() { return API.get('/workouts').catch(() => []); }
+  async function getOneRepMaxes() { return API.get('/1rm').catch(() => []); }
 
   function startOfWeek() {
     const d = new Date();
@@ -182,7 +188,7 @@
     return [...names].sort();
   }
 
-  function drawChart(sessions) {
+  function drawChart(sessions, ormMap) {
     const chartCard = document.getElementById('chart-card');
     const sel = document.getElementById('chart-exercise-select');
     const names = allExerciseNames(sessions);
@@ -194,6 +200,19 @@
     const prev = sel.value;
     sel.innerHTML = names.map(n => `<option value="${n}"${n === prev ? ' selected' : ''}>${n}</option>`).join('');
     const chosen = sel.value;
+
+    // Show or hide 1RM badge for the selected exercise
+    const ormBadge = document.getElementById('orm-badge');
+    if (ormMap) {
+      const ormEntry = ormMap[chosen.toLowerCase()];
+      if (ormEntry) {
+        document.getElementById('orm-badge-value').textContent = parseFloat(ormEntry.weight_kg).toFixed(1) + ' kg';
+        document.getElementById('orm-badge-date').textContent = ormEntry.updated_at ? '(set ' + ormEntry.updated_at + ')' : '';
+        ormBadge.style.display = '';
+      } else {
+        ormBadge.style.display = 'none';
+      }
+    }
 
     const chosenLower = chosen.toLowerCase();
 
@@ -305,7 +324,10 @@
   }
 
   document.getElementById('chart-exercise-select').addEventListener('change', async () => {
-    drawChart(await getSessions());
+    const [sessions, ormEntries] = await Promise.all([getSessions(), getOneRepMaxes()]);
+    const ormMap = {};
+    ormEntries.forEach(e => { ormMap[e.exercise.toLowerCase()] = e; });
+    drawChart(sessions, ormMap);
   });
 
   /* ── Total volume helper ───────────────────────────── */
@@ -384,9 +406,11 @@
 
   /* ── Main render ───────────────────────────────────── */
   async function render() {
-    const sessions = await getSessions();
+    const [sessions, ormEntries] = await Promise.all([getSessions(), getOneRepMaxes()]);
+    const ormMap = {};
+    ormEntries.forEach(e => { ormMap[e.exercise.toLowerCase()] = e; });
     renderStats(sessions);
-    drawChart(sessions);
+    drawChart(sessions, ormMap);
     renderHistory(sessions);
   }
 

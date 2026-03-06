@@ -106,6 +106,15 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
   );
+
+  CREATE TABLE IF NOT EXISTS one_rep_maxes (
+    user_id    INTEGER NOT NULL,
+    exercise   TEXT    NOT NULL COLLATE NOCASE,
+    weight_kg  REAL    NOT NULL,
+    updated_at TEXT    NOT NULL,
+    PRIMARY KEY (user_id, exercise),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: add role column to databases created before this feature
@@ -165,6 +174,10 @@ const stmts = {
   deleteSchedule:         db.prepare('DELETE FROM scheduled_workouts WHERE id = ? AND user_id = ?'),
   getScheduleById:        db.prepare('SELECT id, user_id, date, plan_id, title, notes FROM scheduled_workouts WHERE id = ?'),
   deleteScheduleTrainer:  db.prepare('DELETE FROM scheduled_workouts WHERE id = ?'),
+  // One rep maxes
+  getOneRepMaxes:   db.prepare('SELECT exercise, weight_kg, updated_at FROM one_rep_maxes WHERE user_id = ? ORDER BY exercise COLLATE NOCASE'),
+  upsertOneRepMax:  db.prepare('INSERT INTO one_rep_maxes (user_id, exercise, weight_kg, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, exercise) DO UPDATE SET weight_kg = excluded.weight_kg, updated_at = excluded.updated_at'),
+  deleteOneRepMax:  db.prepare('DELETE FROM one_rep_maxes WHERE user_id = ? AND exercise = ?'),
 };
 
 // ── Express app ─────────────────────────────────────────────────────────────────
@@ -352,6 +365,30 @@ app.get('/api/profile', requireAuth, (req, res) => {
 
 app.put('/api/profile', requireAuth, (req, res) => {
   stmts.upsertProfile.run(req.user.userId, JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+
+// ── One Rep Max routes ──────────────────────────────────────────────────────────
+app.get('/api/1rm', requireAuth, (req, res) => {
+  res.json(stmts.getOneRepMaxes.all(req.user.userId));
+});
+
+app.put('/api/1rm/:exercise', requireAuth, (req, res) => {
+  const exercise = req.params.exercise.trim();
+  if (!exercise) return res.status(400).json({ error: 'Exercise name is required.' });
+  const weightKg = parseFloat(req.body && req.body.weightKg);
+  if (!Number.isFinite(weightKg) || weightKg <= 0) {
+    return res.status(400).json({ error: 'weightKg must be a positive number.' });
+  }
+  const updatedAt = new Date().toISOString().split('T')[0];
+  stmts.upsertOneRepMax.run(req.user.userId, exercise, weightKg, updatedAt);
+  res.json({ ok: true });
+});
+
+app.delete('/api/1rm/:exercise', requireAuth, (req, res) => {
+  const exercise = req.params.exercise.trim();
+  const info = stmts.deleteOneRepMax.run(req.user.userId, exercise);
+  if (info.changes === 0) return res.status(404).json({ error: '1RM entry not found.' });
   res.json({ ok: true });
 });
 
@@ -660,6 +697,10 @@ app.get('/api/trainer/users/:id/weights', requireAuth, requireTrainer, trainerCa
 app.get('/api/trainer/users/:id/calories', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
   const rows = stmts.getCalories.all(req.targetUserId);
   res.json(rows.map(r => ({ ...JSON.parse(r.data), id: r.id })));
+});
+
+app.get('/api/trainer/users/:id/1rm', requireAuth, requireTrainer, trainerCanAccessUser, (req, res) => {
+  res.json(stmts.getOneRepMaxes.all(req.targetUserId));
 });
 
 // ── Trainer plan routes ───────────────────────────────────────────────────────

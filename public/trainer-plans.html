@@ -125,6 +125,19 @@
     <div class="empty-state" id="plans-empty" style="display:none;">No plans yet. Create your first one above!</div>
     <div id="plans-list"></div>
   </div>
+
+  <!-- ── Athlete 1RM Viewer ─────────────────────────────────────────────── -->
+  <div class="card" id="athlete-1rm-card">
+    <h2 style="margin-bottom:14px;color:#cc1a1a;">Athlete One Rep Maxes</h2>
+    <p style="color:#888;font-size:0.9rem;margin-bottom:16px;">Select an athlete to view their recorded 1RM values.</p>
+    <div class="form-group" style="max-width:280px;margin-bottom:16px;">
+      <label for="athlete-1rm-select">Athlete</label>
+      <select id="athlete-1rm-select">
+        <option value="">Select athlete…</option>
+      </select>
+    </div>
+    <div id="athlete-1rm-list"></div>
+  </div>
 </main>
 
 <script src="app.js"></script>
@@ -138,6 +151,10 @@
   // ── Load athletes assigned to this trainer ──────────────────────────────
   async function loadAthletes() {
     allAthletes = await API.get('/trainer/users').catch(() => []);
+    // Populate athlete 1RM selector
+    const sel = document.getElementById('athlete-1rm-select');
+    sel.innerHTML = '<option value="">Select athlete…</option>' +
+      allAthletes.map(u => `<option value="${u.id}">${escHtml(u.username)}</option>`).join('');
   }
 
   // ── Exercise row builder for plan editor ───────────────────────────────
@@ -403,6 +420,46 @@
       container.innerHTML = `<p style="color:#e55;font-size:0.85rem;margin:0;">${e.message}</p>`;
     }
   }
+
+  // ── Athlete 1RM viewer ──────────────────────────────────────────────────
+  async function loadAthleteOrm(userId) {
+    const container = document.getElementById('athlete-1rm-list');
+    if (!userId) { container.innerHTML = ''; return; }
+    container.innerHTML = '<p style="color:#666;font-size:0.85rem;">Loading…</p>';
+    try {
+      const entries = await API.get(`/trainer/users/${userId}/1rm`);
+      if (!entries || entries.length === 0) {
+        container.innerHTML = '<p style="color:#666;font-size:0.85rem;margin:0;">No 1RM entries recorded for this athlete.</p>';
+        return;
+      }
+      container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">Exercise</th>
+              <th style="text-align:right;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">1RM (kg)</th>
+              <th style="text-align:right;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(e => `
+              <tr>
+                <td style="padding:8px 10px;color:#d4d4d4;">${escHtml(e.exercise)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#cc1a1a;font-weight:700;">${parseFloat(e.weight_kg).toFixed(1)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#666;font-size:0.85rem;">${escHtml(e.updated_at || '')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } catch (e) {
+      container.innerHTML = `<p style="color:#e55;font-size:0.85rem;margin:0;">${escHtml(e.message)}</p>`;
+    }
+  }
+
+  document.getElementById('athlete-1rm-select').addEventListener('change', function () {
+    loadAthleteOrm(this.value);
+  });
 
   // ── Boot ────────────────────────────────────────────────────────────────
   (async () => {

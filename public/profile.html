@@ -66,6 +66,35 @@
       <button type="submit" class="btn btn-primary">Save Profile</button>
     </form>
   </div>
+
+  <!-- ── One Rep Maxes ───────────────────────────────────── -->
+  <div class="card" id="orm-card">
+    <h2 style="margin-bottom:20px;color:#cc1a1a;">One Rep Maxes (1RM)</h2>
+    <p style="color:#888;font-size:0.9rem;margin-bottom:16px;">Record your personal one rep maximum for each exercise. This will be shown on the Progression page.</p>
+
+    <div id="orm-list" style="margin-bottom:20px;"></div>
+
+    <form id="orm-form" novalidate>
+      <div class="form-row">
+        <div class="form-group" style="flex:1.5;min-width:140px;">
+          <label>Muscle Group</label>
+          <select id="orm-group" aria-label="Muscle group">
+            <option value="">Select group…</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:2;min-width:140px;">
+          <label for="orm-exercise">Exercise</label>
+          <select id="orm-exercise-select" style="display:none;"><option value="">Select exercise…</option></select>
+          <input type="text" id="orm-exercise" placeholder="Select a group or type custom" />
+        </div>
+        <div class="form-group" style="flex:1;min-width:100px;">
+          <label for="orm-weight">1RM (kg)</label>
+          <input type="number" id="orm-weight" placeholder="e.g. 100" min="0.5" step="0.5" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Add / Update 1RM</button>
+    </form>
+  </div>
 </main>
 
 <script src="app.js"></script>
@@ -99,7 +128,117 @@
     showAlert(document.getElementById('profile-card'), 'Profile saved successfully!');
   });
 
+  /* ── 1RM Section ──────────────────────────────────────── */
+
+  function renderOrm(entries) {
+    const list = document.getElementById('orm-list');
+    if (!entries || entries.length === 0) {
+      list.innerHTML = '<p style="color:#666;font-size:0.9rem;">No 1RM entries yet. Add your first below.</p>';
+      return;
+    }
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">Exercise</th>
+            <th style="text-align:right;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">1RM (kg)</th>
+            <th style="text-align:right;padding:8px 10px;color:#888;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #2a2a2a;">Updated</th>
+            <th style="padding:8px 10px;border-bottom:1px solid #2a2a2a;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.map(e => `
+            <tr>
+              <td style="padding:8px 10px;color:#d4d4d4;">${escHtmlShared(e.exercise)}</td>
+              <td style="padding:8px 10px;text-align:right;color:#cc1a1a;font-weight:700;">${parseFloat(e.weight_kg).toFixed(1)}</td>
+              <td style="padding:8px 10px;text-align:right;color:#666;font-size:0.85rem;">${e.updated_at || ''}</td>
+              <td style="padding:8px 10px;text-align:right;">
+                <button class="btn btn-danger btn-xs" data-exercise="${escHtmlShared(e.exercise)}" style="padding:4px 10px;font-size:0.8rem;">Remove</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    list.querySelectorAll('.btn-danger').forEach(btn => {
+      btn.addEventListener('click', async function () {
+        const exercise = this.dataset.exercise;
+        await API.del('/1rm/' + encodeURIComponent(exercise));
+        loadOrm();
+      });
+    });
+  }
+
+  async function loadOrm() {
+    const entries = await API.get('/1rm').catch(() => []);
+    renderOrm(entries);
+  }
+
+  // Populate muscle group selector using EXERCISE_CATALOGUE
+  (function populateOrmGroup() {
+    const sel = document.getElementById('orm-group');
+    Object.keys(EXERCISE_CATALOGUE).forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      sel.appendChild(opt);
+    });
+  })();
+
+  document.getElementById('orm-group').addEventListener('change', function () {
+    const group = this.value;
+    const exSel = document.getElementById('orm-exercise-select');
+    const exInput = document.getElementById('orm-exercise');
+    if (group && EXERCISE_CATALOGUE[group]) {
+      exSel.innerHTML = '<option value="">Select exercise…</option>' +
+        EXERCISE_CATALOGUE[group].map(ex => `<option value="${escHtmlShared(ex)}">${escHtmlShared(ex)}</option>`).join('') +
+        '<option value="__custom__">— Custom —</option>';
+      exSel.style.display = '';
+      exInput.style.display = 'none';
+      exInput.value = '';
+    } else {
+      exSel.style.display = 'none';
+      exInput.style.display = '';
+    }
+  });
+
+  document.getElementById('orm-exercise-select').addEventListener('change', function () {
+    const exInput = document.getElementById('orm-exercise');
+    if (this.value === '__custom__') {
+      exInput.style.display = '';
+      exInput.focus();
+      exInput.value = '';
+    } else {
+      exInput.style.display = 'none';
+      exInput.value = this.value;
+    }
+  });
+
+  document.getElementById('orm-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const exSel = document.getElementById('orm-exercise-select');
+    const exInput = document.getElementById('orm-exercise');
+    let exercise = exInput.value.trim();
+    if (!exercise && exSel.style.display !== 'none' && exSel.value && exSel.value !== '__custom__') {
+      exercise = exSel.value;
+    }
+    const weightKg = parseFloat(document.getElementById('orm-weight').value);
+
+    if (!exercise) { alert('Please enter or select an exercise.'); return; }
+    if (!Number.isFinite(weightKg) || weightKg <= 0) { alert('Please enter a valid weight.'); return; }
+
+    await API.put('/1rm/' + encodeURIComponent(exercise), { weightKg });
+    document.getElementById('orm-weight').value = '';
+    document.getElementById('orm-group').value = '';
+    document.getElementById('orm-exercise-select').style.display = 'none';
+    document.getElementById('orm-exercise').style.display = '';
+    document.getElementById('orm-exercise').value = '';
+    showAlert(document.getElementById('orm-card'), '1RM saved!');
+    loadOrm();
+  });
+
   loadProfile();
+  loadOrm();
 </script>
 </body>
 </html>
