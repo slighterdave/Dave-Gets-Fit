@@ -1486,3 +1486,63 @@ test('workout generator supports all valid muscle groups', async () => {
   const returnedGroups = new Set(body.exercises.map(ex => ex.muscleGroup));
   validGroups.forEach(g => assert.ok(returnedGroups.has(g), `should have exercises for group: ${g}`));
 });
+
+test('workout generator includes exercises even when no 1RM is set', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 5,
+    muscleGroups: ['chest'],
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(body.exercises.length > 0, 'exercises should be returned even without any 1RM set');
+  const noOneRmExercises = body.exercises.filter(ex => ex.suggestedWeightKg === null);
+  assert.ok(noOneRmExercises.length > 0, 'exercises without 1RM should have suggestedWeightKg: null');
+});
+
+test('save plan requires auth', async () => {
+  const { status } = await req('POST', '/api/user/saved-plans', {
+    name: 'My Plan',
+    exercises: [{ name: 'Bench press (barbell)', sets: '3', reps: '10', weightKg: '', notes: '' }],
+  });
+  assert.equal(status, 401);
+});
+
+test('save plan returns 400 when name is missing', async () => {
+  const { status, body } = await req('POST', '/api/user/saved-plans', {
+    exercises: [{ name: 'Bench press (barbell)', sets: '3', reps: '10', weightKg: '', notes: '' }],
+  }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('save plan returns 400 when exercises array is empty', async () => {
+  const { status, body } = await req('POST', '/api/user/saved-plans', {
+    name: 'My Plan',
+    exercises: [],
+  }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('save plan creates a plan and assigns it to the user', async () => {
+  const exercises = [
+    { name: 'Bench press (barbell)', sets: '4', reps: '8', weightKg: '80', notes: '' },
+    { name: 'Incline dumbbell press', sets: '3', reps: '12', weightKg: '30', notes: '' },
+  ];
+  const { status, body } = await req('POST', '/api/user/saved-plans', {
+    name: 'My Generated Push Day',
+    description: 'Generated workout - intensity 7/10 (83% of 1RM)',
+    exercises,
+  }, aliceToken);
+  assert.equal(status, 201);
+  assert.ok(body.ok);
+  assert.ok(body.id, 'response should include the new plan id');
+
+  // Verify the plan appears in the user's plans list
+  const { status: listStatus, body: plans } = await req('GET', '/api/user/plans', undefined, aliceToken);
+  assert.equal(listStatus, 200);
+  const saved = plans.find(p => p.id === body.id);
+  assert.ok(saved, 'saved plan should appear in user plans list');
+  assert.equal(saved.name, 'My Generated Push Day');
+  assert.equal(saved.exercises.length, 2);
+});
