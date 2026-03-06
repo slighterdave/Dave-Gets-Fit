@@ -1407,8 +1407,24 @@ test('workout generator calculates suggested weight from 1RM', async () => {
     assert.equal(benchEx.oneRepMaxKg, 100);
     assert.ok(benchEx.suggestedWeightKg !== null, 'suggestedWeightKg should be set when 1RM exists');
     assert.ok(benchEx.suggestedWeightKg > 0, 'suggested weight should be positive');
-    // At intensity 10 (100%), suggested weight should equal 1RM rounded to nearest 0.5
+    // At intensity 10 (100%), suggested weight should equal 1RM rounded to nearest 2.5 kg
     assert.equal(benchEx.suggestedWeightKg, 100);
+  }
+});
+
+test('workout generator rounds suggested weight to nearest 2.5 kg', async () => {
+  // 83% of 100 kg = 83 kg → nearest 2.5 kg = 82.5 kg
+  await req('PUT', '/api/1rm/Bench%20press%20(barbell)', { weightKg: 100 }, aliceToken);
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 7, // intensityPct = round(50 + 6/9*50) = 83%
+    muscleGroups: ['chest'],
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.intensityPct, 83);
+  const benchEx = body.exercises.find(ex => ex.name === 'Bench press (barbell)');
+  if (benchEx) {
+    assert.equal(benchEx.suggestedWeightKg, 82.5, '83% of 100 kg should round to 82.5 kg (nearest 2.5)');
   }
 });
 

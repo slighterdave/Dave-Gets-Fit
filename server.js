@@ -1075,9 +1075,9 @@ app.post('/api/workout-generator', requireAuth, (req, res) => {
     for (const name of picked) {
       usedExercises.add(name.toLowerCase());
       const oneRepMaxKg = oneRepMaxMap[name.toLowerCase()] ?? null;
-      // Round to nearest 0.5 kg
+      // Round to nearest 2.5 kg (e.g. 83% of 100 kg → 82.5 kg)
       const suggestedWeightKg = oneRepMaxKg !== null
-        ? Math.round(oneRepMaxKg * intensityPct / 100 * 2) / 2
+        ? Math.round(oneRepMaxKg * intensityPct / 100 / 2.5) * 2.5
         : null;
       exercises.push({ name, muscleGroup: group, sets, reps, suggestedWeightKg, oneRepMaxKg, intensityPct });
     }
