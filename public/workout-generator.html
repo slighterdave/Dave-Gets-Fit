@@ -208,7 +208,20 @@
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;" id="results-actions">
         <button class="btn btn-primary" id="log-workout-btn">Log This Workout</button>
+        <button class="btn btn-secondary" id="save-plan-btn">Save as Plan</button>
         <button class="btn btn-secondary" id="regenerate-btn">Regenerate</button>
+      </div>
+
+      <div id="save-plan-form" style="display:none;margin-top:16px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="form-group" style="flex:1;min-width:200px;margin:0;">
+            <label for="save-plan-name">Plan Name</label>
+            <input type="text" id="save-plan-name" placeholder="e.g. My Push Day" maxlength="100" />
+          </div>
+          <button class="btn btn-primary" id="save-plan-confirm-btn">Save</button>
+          <button class="btn btn-secondary" id="save-plan-cancel-btn">Cancel</button>
+        </div>
+        <div id="save-plan-error" style="color:#e55;font-size:0.85rem;margin-top:8px;min-height:1.2em;"></div>
       </div>
     </div>
   </div>
@@ -252,6 +265,7 @@
 
     if (muscleGroups.length === 0) {
       errEl.textContent = 'Please select at least one muscle group.';
+      errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
@@ -286,6 +300,13 @@
     const actionsEl = document.getElementById('results-actions');
     const noOrmEl  = document.getElementById('no-1rm-note');
     const avoidedEl = document.getElementById('avoided-note');
+
+    // Reset save-plan form state
+    document.getElementById('save-plan-form').style.display = 'none';
+    document.getElementById('save-plan-name').value = '';
+    document.getElementById('save-plan-error').textContent = '';
+    document.getElementById('save-plan-btn').disabled = false;
+    document.getElementById('save-plan-btn').textContent = 'Save as Plan';
 
     document.getElementById('res-intensity').textContent = result.intensity + ' / 10';
     document.getElementById('res-pct').textContent = result.intensityPct + '% of 1RM';
@@ -365,6 +386,63 @@
       btn.disabled = false;
       btn.textContent = 'Log This Workout';
     }
+  });
+
+  // ── Save as Plan ─────────────────────────────────────────────────────────
+  document.getElementById('save-plan-btn').addEventListener('click', () => {
+    const form = document.getElementById('save-plan-form');
+    form.style.display = form.style.display === 'none' ? '' : 'none';
+    if (form.style.display !== 'none') {
+      document.getElementById('save-plan-name').focus();
+    }
+  });
+
+  document.getElementById('save-plan-cancel-btn').addEventListener('click', () => {
+    document.getElementById('save-plan-form').style.display = 'none';
+  });
+
+  document.getElementById('save-plan-confirm-btn').addEventListener('click', async () => {
+    if (!lastResult || lastResult.exercises.length === 0) return;
+
+    const nameInput = document.getElementById('save-plan-name');
+    const errEl     = document.getElementById('save-plan-error');
+    const name      = nameInput.value.trim();
+
+    if (!name) {
+      errEl.textContent = 'Please enter a plan name.';
+      nameInput.focus();
+      return;
+    }
+
+    const exercises = lastResult.exercises.map(ex => ({
+      name:     ex.name,
+      sets:     String(ex.sets),
+      reps:     String(ex.reps),
+      weightKg: ex.suggestedWeightKg !== null ? String(ex.suggestedWeightKg) : '',
+      notes:    '',
+    }));
+
+    const btn = document.getElementById('save-plan-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    errEl.textContent = '';
+
+    try {
+      await API.post('/user/saved-plans', {
+        name,
+        description: 'Generated workout - intensity ' + lastResult.intensity + '/10 (' + lastResult.intensityPct + '% of 1RM)',
+        exercises,
+      });
+      window.location.href = 'my-routines.html';
+    } catch (err) {
+      errEl.textContent = err.message || 'Failed to save plan.';
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }
+  });
+
+  document.getElementById('save-plan-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('save-plan-confirm-btn').click();
   });
 </script>
 </body>

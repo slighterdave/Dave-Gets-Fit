@@ -799,6 +799,20 @@ app.get('/api/user/plans', requireAuth, (req, res) => {
   res.json(rows.map(r => JSON.parse(r.data)));
 });
 
+// POST /api/user/saved-plans  – save a personal plan (any authenticated user)
+app.post('/api/user/saved-plans', requireAuth, (req, res) => {
+  const plan = req.body;
+  if (!plan || !plan.name || !Array.isArray(plan.exercises) || plan.exercises.length === 0) {
+    return res.status(400).json({ error: 'Plan name and at least one exercise are required.' });
+  }
+  const id = crypto.randomUUID();
+  plan.id = id;
+  plan.trainerId = req.user.userId;
+  stmts.insertPlan.run(id, req.user.userId, plan.name, JSON.stringify(plan));
+  stmts.assignPlan.run(id, req.user.userId);
+  res.status(201).json({ ok: true, id });
+});
+
 // ── Schedule routes ───────────────────────────────────────────────────────────
 
 // GET /api/schedule  – returns all scheduled workouts for the current user
