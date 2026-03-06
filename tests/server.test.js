@@ -1311,3 +1311,162 @@ test('completing a scheduled workout requires auth', async () => {
   const { status } = await req('POST', `/api/schedule/${scheduleCompleteId}/complete`, {});
   assert.equal(status, 401);
 });
+
+// ── Workout Generator ─────────────────────────────────────────────────────────
+
+test('workout generator requires auth', async () => {
+  const { status } = await req('POST', '/api/workout-generator', { intensity: 5, muscleGroups: ['chest'] });
+  assert.equal(status, 401);
+});
+
+test('workout generator returns 400 when intensity is missing', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { muscleGroups: ['chest'] }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('workout generator returns 400 when intensity is out of range', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 11, muscleGroups: ['chest'] }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('workout generator returns 400 when muscleGroups is empty', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 5, muscleGroups: [] }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('workout generator returns 400 for invalid muscle group', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 5, muscleGroups: ['invalid'] }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('workout generator returns 400 for negative avoidDays', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 5, muscleGroups: ['chest'], avoidDays: -1 }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('workout generator returns exercises for a single muscle group', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 5, muscleGroups: ['chest'], avoidDays: 0 }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body.exercises), 'exercises should be an array');
+  assert.ok(body.exercises.length > 0, 'should return at least one exercise');
+  body.exercises.forEach(ex => {
+    assert.equal(ex.muscleGroup, 'chest');
+    assert.ok(ex.name, 'exercise should have a name');
+    assert.ok(Number.isFinite(ex.sets) && ex.sets > 0, 'sets should be a positive number');
+    assert.ok(Number.isFinite(ex.reps) && ex.reps > 0, 'reps should be a positive number');
+    assert.equal(ex.intensityPct, body.intensityPct);
+  });
+});
+
+test('workout generator returns exercises for multiple muscle groups', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 7,
+    muscleGroups: ['chest', 'back', 'legs'],
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(body.exercises.length > 0);
+  const groups = new Set(body.exercises.map(ex => ex.muscleGroup));
+  assert.ok(groups.has('chest'));
+  assert.ok(groups.has('back'));
+  assert.ok(groups.has('legs'));
+});
+
+test('workout generator intensity 1 gives 50% intensity percentage', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 1, muscleGroups: ['chest'] }, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.intensity, 1);
+  assert.equal(body.intensityPct, 50);
+});
+
+test('workout generator intensity 10 gives 100% intensity percentage', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', { intensity: 10, muscleGroups: ['chest'] }, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.intensity, 10);
+  assert.equal(body.intensityPct, 100);
+});
+
+test('workout generator calculates suggested weight from 1RM', async () => {
+  // Set a 1RM for an exercise in the chest pool
+  await req('PUT', '/api/1rm/Bench%20press%20(barbell)', { weightKg: 100 }, aliceToken);
+
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 10,
+    muscleGroups: ['chest'],
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+
+  const benchEx = body.exercises.find(ex => ex.name === 'Bench press (barbell)');
+  if (benchEx) {
+    assert.equal(benchEx.oneRepMaxKg, 100);
+    assert.ok(benchEx.suggestedWeightKg !== null, 'suggestedWeightKg should be set when 1RM exists');
+    assert.ok(benchEx.suggestedWeightKg > 0, 'suggested weight should be positive');
+    // At intensity 10 (100%), suggested weight should equal 1RM rounded to nearest 0.5
+    assert.equal(benchEx.suggestedWeightKg, 100);
+  }
+});
+
+test('workout generator excludes recently done exercises when avoidDays > 0', async () => {
+  // Create a user in the DB to test avoidance in isolation
+  const genUserInfo = db.prepare("INSERT INTO users (username, password_hash) VALUES (?, '!')").run('gen_avoid_user');
+  const genUserId = genUserInfo.lastInsertRowid;
+  const genToken = jwt.sign(
+    { userId: genUserId, username: 'gen_avoid_user', role: 'user' },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  // Log a recent workout containing all chest exercises
+  const chestExercises = [
+    'Bench press (barbell)',
+    'Incline bench press (barbell)',
+    'Dumbbell bench press',
+    'Incline dumbbell press',
+    'Chest press (machine)',
+  ];
+  await req('POST', '/api/workouts', {
+    date: new Date().toISOString().split('T')[0],
+    notes: 'Chest day',
+    exercises: chestExercises.map(name => ({ name, sets: '3', reps: '10', weightKg: '60' })),
+  }, genToken);
+
+  // Generator with avoidDays=3 should produce no chest exercises
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 5,
+    muscleGroups: ['chest'],
+    avoidDays: 3,
+  }, genToken);
+  assert.equal(status, 200);
+  assert.equal(body.exercises.length, 0, 'all chest exercises were done recently, so none should be returned');
+  assert.ok(body.avoidedCount > 0, 'avoidedCount should reflect excluded exercises');
+});
+
+test('workout generator with avoidDays=0 does not exclude any exercises', async () => {
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 5,
+    muscleGroups: ['biceps'],
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(body.exercises.length > 0);
+  assert.equal(body.avoidedCount, 0);
+});
+
+test('workout generator supports all valid muscle groups', async () => {
+  const validGroups = ['chest', 'shoulders', 'triceps', 'back', 'biceps', 'core', 'legs', 'fullbody'];
+  const { status, body } = await req('POST', '/api/workout-generator', {
+    intensity: 5,
+    muscleGroups: validGroups,
+    avoidDays: 0,
+  }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(body.exercises.length > 0);
+  const returnedGroups = new Set(body.exercises.map(ex => ex.muscleGroup));
+  validGroups.forEach(g => assert.ok(returnedGroups.has(g), `should have exercises for group: ${g}`));
+});

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GetUs.Fit - Workout Generator</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Intensity slider */
+    .intensity-wrap {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .intensity-wrap input[type="range"] {
+      flex: 1;
+      accent-color: #8b0000;
+      height: 6px;
+      cursor: pointer;
+    }
+    .intensity-badge {
+      min-width: 80px;
+      text-align: center;
+      background: #111;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      padding: 6px 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #cc1a1a;
+      letter-spacing: 0.05em;
+    }
+
+    /* Muscle group checkboxes */
+    .muscle-group-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .muscle-group-grid label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #111;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #999;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      user-select: none;
+    }
+    .muscle-group-grid label:hover {
+      border-color: #8b0000;
+      color: #d4d4d4;
+    }
+    .muscle-group-grid input[type="checkbox"] {
+      accent-color: #8b0000;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .muscle-group-grid input[type="checkbox"]:checked + span {
+      color: #cc1a1a;
+    }
+    .muscle-group-grid label:has(input:checked) {
+      border-color: #8b0000;
+      background: #1f0000;
+      color: #cc1a1a;
+    }
+
+    /* Results table */
+    #results-section { display: none; }
+    .results-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .results-meta .meta-pill {
+      background: #111;
+      border: 1px solid #2e2e2e;
+      border-radius: 3px;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #888;
+    }
+    .results-meta .meta-pill strong {
+      color: #cc1a1a;
+      margin-left: 4px;
+    }
+    .no-1rm-note {
+      font-size: 0.82rem;
+      color: #666;
+      margin-top: 10px;
+      font-style: italic;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="index.html"><img src="Assets/GetUsTransparent.png" alt="GetUs.Fit" class="brand-logo" /></a>
+  <div class="nav-links" id="nav-links">
+    <a href="index.html">Home</a>
+    <a href="progression.html">Progression</a>
+    <a href="weight.html">Weight</a>
+    <a href="calories.html">Calories</a>
+    <a href="my-plans.html">My Plans</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-user">
+      <a class="nav-username" id="nav-username-display" href="profile.html"></a>
+      <button class="btn-nav-logout" onclick="Auth.logout()">Logout</button>
+    </div>
+    <button class="nav-burger" id="nav-burger" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+  </div>
+</nav>
+
+<main>
+  <h1>Workout Generator</h1>
+  <p class="subtitle">Choose your intensity and muscle groups to get a personalised workout built around your 1RMs.</p>
+
+  <!-- ── Generator Controls ─────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Configure Your Workout</h2>
+
+    <!-- Intensity slider -->
+    <div class="form-group">
+      <label for="intensity-slider">Intensity (1 = 50% of 1RM &nbsp;&nbsp; 10 = 100% of 1RM)</label>
+      <div class="intensity-wrap">
+        <input type="range" id="intensity-slider" min="1" max="10" value="7" />
+        <div class="intensity-badge" id="intensity-display">7 &mdash; 85%</div>
+      </div>
+    </div>
+
+    <!-- Muscle group selector -->
+    <div class="form-group">
+      <label>Muscle Groups (select one or more)</label>
+      <div class="muscle-group-grid" id="muscle-group-grid">
+        <label><input type="checkbox" value="chest" /><span>Chest</span></label>
+        <label><input type="checkbox" value="back" /><span>Back</span></label>
+        <label><input type="checkbox" value="shoulders" /><span>Shoulders</span></label>
+        <label><input type="checkbox" value="biceps" /><span>Biceps</span></label>
+        <label><input type="checkbox" value="triceps" /><span>Triceps</span></label>
+        <label><input type="checkbox" value="core" /><span>Core</span></label>
+        <label><input type="checkbox" value="legs" /><span>Legs</span></label>
+        <label><input type="checkbox" value="fullbody" /><span>Full Body</span></label>
+      </div>
+    </div>
+
+    <!-- Avoid days -->
+    <div class="form-group" style="max-width:320px;">
+      <label for="avoid-days">Exclude exercises done within the last N days (0 = no restriction)</label>
+      <input type="number" id="avoid-days" min="0" max="365" value="0" placeholder="0 = no restriction" />
+    </div>
+
+    <div id="gen-error" style="color:#e55;font-size:0.85rem;margin-bottom:12px;min-height:1.2em;"></div>
+
+    <button class="btn btn-primary" id="generate-btn">Generate Workout</button>
+  </div>
+
+  <!-- ── Results ────────────────────────────────────────────────────────── -->
+  <div id="results-section">
+    <div class="card">
+      <h2>Generated Workout</h2>
+
+      <div class="results-meta">
+        <div class="meta-pill">Intensity <strong id="res-intensity"></strong></div>
+        <div class="meta-pill">Target <strong id="res-pct"></strong></div>
+        <div class="meta-pill">Scheme <strong id="res-scheme"></strong></div>
+      </div>
+
+      <div id="avoided-note" style="display:none;font-size:0.82rem;color:#666;margin-bottom:14px;letter-spacing:0;text-transform:none;"></div>
+
+      <div class="table-scroll">
+        <table id="results-table">
+          <thead>
+            <tr>
+              <th>Exercise</th>
+              <th>Muscle Group</th>
+              <th>Sets</th>
+              <th>Reps</th>
+              <th>Suggested Weight (kg)</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <p class="no-1rm-note" id="no-1rm-note" style="display:none;">
+        Some exercises show no suggested weight because no 1RM is recorded for them.
+        Set your 1RMs in the Progression Tracker to get weight recommendations for every exercise.
+      </p>
+
+      <div id="empty-results" style="display:none;" class="empty-state">
+        No exercises could be generated for the selected muscle groups and restrictions.
+        Try reducing the avoid-days window or selecting additional muscle groups.
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;" id="results-actions">
+        <button class="btn btn-primary" id="log-workout-btn">Log This Workout</button>
+        <button class="btn btn-secondary" id="regenerate-btn">Regenerate</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  'use strict';
+
+  Auth.requireAuth();
+
+  // ── Intensity slider ─────────────────────────────────────────────────────
+  const slider  = document.getElementById('intensity-slider');
+  const display = document.getElementById('intensity-display');
+
+  function intensityPct(val) {
+    return Math.round(50 + (val - 1) / 9 * 50);
+  }
+
+  function updateDisplay() {
+    const val = parseInt(slider.value, 10);
+    display.textContent = val + ' — ' + intensityPct(val) + '%';
+  }
+
+  slider.addEventListener('input', updateDisplay);
+  updateDisplay();
+
+  // ── Generate ─────────────────────────────────────────────────────────────
+  let lastResult = null;
+
+  async function generate() {
+    const errEl = document.getElementById('gen-error');
+    errEl.textContent = '';
+
+    const intensity = parseInt(slider.value, 10);
+    const avoidDays = parseInt(document.getElementById('avoid-days').value, 10) || 0;
+
+    const muscleGroups = Array.from(
+      document.querySelectorAll('#muscle-group-grid input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+
+    if (muscleGroups.length === 0) {
+      errEl.textContent = 'Please select at least one muscle group.';
+      return;
+    }
+
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    try {
+      const result = await API.post('/workout-generator', { intensity, muscleGroups, avoidDays });
+      lastResult = result;
+      renderResults(result);
+    } catch (err) {
+      errEl.textContent = err.message || 'Failed to generate workout.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generate Workout';
+    }
+  }
+
+  document.getElementById('generate-btn').addEventListener('click', generate);
+  document.getElementById('regenerate-btn').addEventListener('click', generate);
+
+  // ── Render results ───────────────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderResults(result) {
+    const section  = document.getElementById('results-section');
+    const tbody    = document.getElementById('results-tbody');
+    const emptyEl  = document.getElementById('empty-results');
+    const actionsEl = document.getElementById('results-actions');
+    const noOrmEl  = document.getElementById('no-1rm-note');
+    const avoidedEl = document.getElementById('avoided-note');
+
+    document.getElementById('res-intensity').textContent = result.intensity + ' / 10';
+    document.getElementById('res-pct').textContent = result.intensityPct + '% of 1RM';
+    document.getElementById('res-scheme').textContent = result.sets + ' sets x ' + result.reps + ' reps';
+
+    if (result.avoidedCount > 0) {
+      avoidedEl.style.display = '';
+      avoidedEl.textContent = result.avoidedCount + ' exercise' +
+        (result.avoidedCount !== 1 ? 's' : '') +
+        ' excluded due to the avoid-days restriction.';
+    } else {
+      avoidedEl.style.display = 'none';
+    }
+
+    tbody.innerHTML = '';
+    if (result.exercises.length === 0) {
+      emptyEl.style.display = '';
+      actionsEl.style.display = 'none';
+      noOrmEl.style.display = 'none';
+    } else {
+      emptyEl.style.display = 'none';
+      actionsEl.style.display = '';
+
+      let anyMissing1rm = false;
+      result.exercises.forEach(ex => {
+        const weightCell = ex.suggestedWeightKg !== null
+          ? '<strong style="color:#cc1a1a;">' + ex.suggestedWeightKg.toFixed(1) + ' kg</strong>'
+          : '<span style="color:#555;">No 1RM set</span>';
+        if (ex.suggestedWeightKg === null) anyMissing1rm = true;
+
+        const groupLabel = ex.muscleGroup === 'fullbody' ? 'Full Body'
+          : ex.muscleGroup.charAt(0).toUpperCase() + ex.muscleGroup.slice(1);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><strong>' + escHtml(ex.name) + '</strong></td>' +
+          '<td>' + escHtml(groupLabel) + '</td>' +
+          '<td>' + ex.sets + '</td>' +
+          '<td>' + ex.reps + '</td>' +
+          '<td>' + weightCell + '</td>';
+        tbody.appendChild(tr);
+      });
+
+      noOrmEl.style.display = anyMissing1rm ? '' : 'none';
+    }
+
+    section.style.display = '';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Log as Workout ───────────────────────────────────────────────────────
+  document.getElementById('log-workout-btn').addEventListener('click', async () => {
+    if (!lastResult || lastResult.exercises.length === 0) return;
+
+    const date = today();
+    const exercises = lastResult.exercises.map(ex => ({
+      name:     ex.name,
+      sets:     String(ex.sets),
+      reps:     String(ex.reps),
+      weightKg: ex.suggestedWeightKg !== null ? String(ex.suggestedWeightKg) : '',
+      notes:    '',
+    }));
+
+    const btn = document.getElementById('log-workout-btn');
+    btn.disabled = true;
+    btn.textContent = 'Logging...';
+
+    try {
+      await API.post('/workouts', {
+        date,
+        notes: 'Generated workout - intensity ' + lastResult.intensity + '/10 (' + lastResult.intensityPct + '% of 1RM)',
+        exercises,
+      });
+      showAlert(document.querySelector('main'), 'Workout logged! View it in your Progression Tracker.');
+      btn.textContent = 'Logged';
+    } catch (err) {
+      showAlert(document.querySelector('main'), err.message || 'Failed to log workout.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Log This Workout';
+    }
+  });
+</script>
+</body>
+</html>

@@ -324,6 +324,16 @@ const Auth = {
       navLinks.appendChild(routinesLink);
     }
 
+    // Workout Generator link – visible to all authenticated users
+    if (navLinks && !navLinks.querySelector('a[href="workout-generator.html"]')) {
+      const generatorLink = document.createElement('a');
+      generatorLink.id = 'nav-generator-link';
+      generatorLink.href = 'workout-generator.html';
+      generatorLink.textContent = 'Generator';
+      if (window.location.pathname.endsWith('workout-generator.html')) generatorLink.classList.add('active');
+      navLinks.appendChild(generatorLink);
+    }
+
     if (role === 'admin' || role === 'trainer') {
       if (navLinks) {
         const adminLink = document.createElement('a');
