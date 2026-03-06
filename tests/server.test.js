@@ -250,6 +250,66 @@ test('delete a calorie entry', async () => {
   assert.equal(body.length, 0);
 });
 
+// ── One Rep Maxes ─────────────────────────────────────────────────────────────
+test('get 1RM returns empty array initially', async () => {
+  const { status, body } = await req('GET', '/api/1rm', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.deepEqual(body, []);
+});
+
+test('set a 1RM entry', async () => {
+  const { status, body } = await req('PUT', '/api/1rm/Bench%20Press', { weightKg: 100 }, aliceToken);
+  assert.equal(status, 200);
+  assert.ok(body.ok);
+});
+
+test('get 1RM returns saved entry', async () => {
+  const { status, body } = await req('GET', '/api/1rm', undefined, aliceToken);
+  assert.equal(status, 200);
+  assert.equal(body.length, 1);
+  assert.equal(body[0].exercise, 'Bench Press');
+  assert.equal(body[0].weight_kg, 100);
+  assert.ok(body[0].updated_at);
+});
+
+test('updating a 1RM replaces previous value', async () => {
+  await req('PUT', '/api/1rm/Bench%20Press', { weightKg: 110 }, aliceToken);
+  const { body } = await req('GET', '/api/1rm', undefined, aliceToken);
+  assert.equal(body.length, 1);
+  assert.equal(body[0].weight_kg, 110);
+});
+
+test('set a second 1RM entry', async () => {
+  const { status } = await req('PUT', '/api/1rm/Back%20squat', { weightKg: 140 }, aliceToken);
+  assert.equal(status, 200);
+  const { body } = await req('GET', '/api/1rm', undefined, aliceToken);
+  assert.equal(body.length, 2);
+});
+
+test('set 1RM with invalid weight returns 400', async () => {
+  const { status, body } = await req('PUT', '/api/1rm/Deadlift', { weightKg: -5 }, aliceToken);
+  assert.equal(status, 400);
+  assert.ok(body.error);
+});
+
+test('1RM requires auth', async () => {
+  const { status } = await req('GET', '/api/1rm');
+  assert.equal(status, 401);
+});
+
+test('delete a 1RM entry', async () => {
+  const { status } = await req('DELETE', '/api/1rm/Bench%20Press', undefined, aliceToken);
+  assert.equal(status, 200);
+  const { body } = await req('GET', '/api/1rm', undefined, aliceToken);
+  assert.equal(body.length, 1);
+  assert.equal(body[0].exercise, 'Back squat');
+});
+
+test('delete non-existent 1RM returns 404', async () => {
+  const { status } = await req('DELETE', '/api/1rm/Nonexistent', undefined, aliceToken);
+  assert.equal(status, 404);
+});
+
 // ── Food search ───────────────────────────────────────────────────────────────
 test('food search requires auth', async () => {
   const { status } = await req('GET', '/api/food/search?q=apple');
@@ -722,6 +782,21 @@ test('trainer can view assigned user weights', async () => {
   const { status, body } = await req('GET', `/api/trainer/users/${bobId}/weights`, undefined, trainerToken);
   assert.equal(status, 200);
   assert.ok(Array.isArray(body));
+});
+
+test('trainer can view assigned user 1RM entries', async () => {
+  const { body: users } = await req('GET', '/api/trainer/users', undefined, trainerToken);
+  const bobId = users[0].id;
+  const { status, body } = await req('GET', `/api/trainer/users/${bobId}/1rm`, undefined, trainerToken);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(body));
+});
+
+test('trainer cannot view 1RM for unassigned user', async () => {
+  const { body: allUsers } = await req('GET', '/api/admin/users', undefined, adminToken);
+  const aliceId = allUsers.find(u => u.username === 'alice').id;
+  const { status } = await req('GET', `/api/trainer/users/${aliceId}/1rm`, undefined, trainerToken);
+  assert.equal(status, 403);
 });
 
 test('trainer cannot view unassigned user data', async () => {
